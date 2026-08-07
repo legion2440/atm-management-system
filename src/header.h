@@ -58,6 +58,7 @@ bool prompt_int(const char *prompt, int *value);
 bool prompt_long_long(const char *prompt, long long *value);
 bool prompt_double(const char *prompt, double *value);
 void trim_whitespace(char *text);
+bool contains_whitespace(const char *text);
 
 /* ui.c */
 void ui_banner(void);
