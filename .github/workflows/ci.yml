@@ -9,5 +9,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build and test
+      - name: Install SQLite development files
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+      - name: Build and test all audit flows
         run: make check
+      - name: Verify text-only fallback build
+        run: make fclean && make TEXT_ONLY=1
