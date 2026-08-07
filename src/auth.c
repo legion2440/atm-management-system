@@ -94,3 +94,54 @@ bool login_user_interactive(User *user) {
     puts("Invalid username or password.");
     return false;
 }
+
+bool change_password_interactive(User *user) {
+    User users[ATM_MAX_USERS];
+    size_t count;
+    if (!load_users(users, ATM_MAX_USERS, &count)) {
+        return false;
+    }
+
+    size_t index = count;
+    for (size_t i = 0U; i < count; ++i) {
+        if (users[i].id == user->id && strcmp(users[i].name, user->name) == 0) {
+            index = i;
+            break;
+        }
+    }
+    if (index == count) {
+        puts("Current user no longer exists.");
+        return false;
+    }
+
+    char current[ATM_PASSWORD_LEN];
+    char replacement[ATM_PASSWORD_LEN];
+    char confirmation[ATM_PASSWORD_LEN];
+    if (!read_line("Current password: ", current, sizeof(current))) {
+        return false;
+    }
+    if (!password_matches(current, users[index].password)) {
+        puts("Current password is incorrect.");
+        return false;
+    }
+    if (!read_line("New password: ", replacement, sizeof(replacement)) || replacement[0] == '\0') {
+        puts("New password cannot be empty.");
+        return false;
+    }
+    if (!read_line("Repeat new password: ", confirmation, sizeof(confirmation))) {
+        return false;
+    }
+    if (strcmp(replacement, confirmation) != 0) {
+        puts("New passwords do not match.");
+        return false;
+    }
+
+    hash_password(replacement, users[index].password);
+    if (!save_users(users, count)) {
+        puts("Could not save the new password.");
+        return false;
+    }
+    *user = users[index];
+    puts("Password changed successfully.");
+    return true;
+}
