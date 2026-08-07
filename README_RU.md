@@ -186,7 +186,12 @@ make TEXT_ONLY=1
 make verify
 ```
 
-В выводе идут именованные `[PASS]` по регистрации, duplicate user, login, созданию счетов, обновлениям, всем процентным кейсам, ограничениям транзакций, overdraft, deposit/withdraw, удалению, transfer, persistence, SQLite, password storage, TUI, account summary, text fallback и instant notification.
+Набор проверок состоит из четырёх слоёв:
+
+- unit boundary checks для дат, високосных годов, maturity dates и расчётов процентов;
+- 25 core-кейсов: регистрация, login, создание/обновление счетов, проценты, транзакции, удаление, transfer ownership и persistence;
+- 20 edge cases: неверные credentials/input, duplicate/negative account number, invalid date/type, negative balance, zero/negative transaction, invalid action, missing/self transfer, доступ прежнего владельца после transfer, ошибки смены пароля, whitespace в token-полях, слишком длинный input и целостность persistent state после отклонённых операций;
+- дополнительные проверки SQLite schema/FK/index, password storage, TUI, account summary, text fallback и instant notification между двумя активными сессиями.
 
 Чистая пересборка плюс тот же набор проверок:
 
@@ -230,6 +235,7 @@ atm-management-system/
 ├── tests/
 │   ├── bonus_flow.sh
 │   ├── core_flow.sh
+│   ├── edge_flow.sh
 │   ├── notification_flow.sh
 │   ├── test_interest.c
 │   └── verify.sh
