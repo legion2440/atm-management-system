@@ -52,7 +52,7 @@ reset-data:
 
 demo: $(TARGET)
 	bash scripts/reset_data.sh
-	./$(TARGET)
+	ATM_DATA_DIR="$(CURDIR)/data" ATM_STORAGE=sqlite ./$(TARGET)
 
 clean:
 	rm -f $(OBJ)
