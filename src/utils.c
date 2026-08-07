@@ -1,11 +1,11 @@
 #include "header.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 
 void trim_whitespace(char *text) {
     if (text == NULL) {
@@ -27,6 +27,18 @@ void trim_whitespace(char *text) {
     }
 }
 
+bool contains_whitespace(const char *text) {
+    if (text == NULL) {
+        return false;
+    }
+    for (size_t i = 0U; text[i] != '\0'; ++i) {
+        if (isspace((unsigned char)text[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool read_line(const char *prompt, char *buffer, size_t size) {
     if (buffer == NULL || size < 2U) {
         return false;
@@ -42,8 +54,13 @@ bool read_line(const char *prompt, char *buffer, size_t size) {
     }
 
     if (strchr(buffer, '\n') == NULL) {
-        int ch;
-        while ((ch = getchar()) != '\n' && ch != EOF) {
+        int ch = getchar();
+        if (ch != '\n' && ch != EOF) {
+            while ((ch = getchar()) != '\n' && ch != EOF) {
+            }
+            puts("Input is too long.");
+            buffer[0] = '\0';
+            return false;
         }
     }
 
