@@ -22,18 +22,19 @@ static long long login_lock_seconds(void) {
     return seconds;
 }
 
+static void dummy_password_work(const char *password) {
+    char ignored[ATM_PASSWORD_LEN];
+    hash_password(password, ignored);
+}
+
 bool find_user_by_name(const char *name, User *user) {
     User users[ATM_MAX_USERS];
     size_t count;
-    if (!load_users(users, ATM_MAX_USERS, &count)) {
-        return false;
-    }
+    if (!load_users(users, ATM_MAX_USERS, &count)) return false;
 
     for (size_t i = 0U; i < count; ++i) {
         if (strcmp(users[i].name, name) == 0) {
-            if (user != NULL) {
-                *user = users[i];
-            }
+            if (user != NULL) *user = users[i];
             return true;
         }
     }
@@ -73,12 +74,6 @@ bool register_user_interactive(void) {
 }
 
 bool login_user_interactive(User *user) {
-    User users[ATM_MAX_USERS];
-    size_t count;
-    if (!load_users(users, ATM_MAX_USERS, &count)) {
-        return false;
-    }
-
     char name[ATM_NAME_LEN];
     char password[ATM_PASSWORD_LEN];
     if (!read_line("Username: ", name, sizeof(name)) || !read_line("Password: ", password, sizeof(password))) {
@@ -92,25 +87,30 @@ bool login_user_interactive(User *user) {
         return false;
     }
 
-    for (size_t i = 0U; i < count; ++i) {
-        if (strcmp(users[i].name, name) != 0 || !password_matches(password, users[i].password)) {
-            continue;
-        }
+    User candidate;
+    bool found = find_user_by_name(name, &candidate);
+    bool matches = false;
+    if (found) {
+        matches = password_matches(password, candidate.password);
+    } else {
+        dummy_password_work(password);
+    }
 
-        if (password_needs_upgrade(users[i].password)) {
+    if (found && matches) {
+        if (password_needs_upgrade(candidate.password)) {
             char upgraded[ATM_PASSWORD_LEN];
             hash_password(password, upgraded);
-            if (storage_update_password(users[i].id, users[i].name, upgraded) != STORAGE_RESULT_OK) {
+            if (storage_update_password(candidate.id, candidate.name, upgraded) != STORAGE_RESULT_OK) {
                 puts("Login failed while upgrading stored credentials.");
                 return false;
             }
-            snprintf(users[i].password, sizeof(users[i].password), "%s", upgraded);
+            snprintf(candidate.password, sizeof(candidate.password), "%s", upgraded);
         }
         if (!storage_login_success(name)) {
             puts("Login failed while updating security state.");
             return false;
         }
-        *user = users[i];
+        *user = candidate;
         printf("Welcome, %s.\n", user->name);
         return true;
     }
@@ -120,11 +120,8 @@ bool login_user_interactive(User *user) {
         puts("Login failed while updating security state.");
         return false;
     }
-    if (locked_until > now) {
-        puts("Too many failed login attempts. Try again later.");
-    } else {
-        puts("Invalid username or password.");
-    }
+    if (locked_until > now) puts("Too many failed login attempts. Try again later.");
+    else puts("Invalid username or password.");
     return false;
 }
 
@@ -138,9 +135,7 @@ bool change_password_interactive(User *user) {
     char current[ATM_PASSWORD_LEN];
     char replacement[ATM_PASSWORD_LEN];
     char confirmation[ATM_PASSWORD_LEN];
-    if (!read_line("Current password: ", current, sizeof(current))) {
-        return false;
-    }
+    if (!read_line("Current password: ", current, sizeof(current))) return false;
     if (!password_matches(current, current_user.password)) {
         puts("Current password is incorrect.");
         return false;
@@ -149,9 +144,7 @@ bool change_password_interactive(User *user) {
         puts("New password cannot be empty.");
         return false;
     }
-    if (!read_line("Repeat new password: ", confirmation, sizeof(confirmation))) {
-        return false;
-    }
+    if (!read_line("Repeat new password: ", confirmation, sizeof(confirmation))) return false;
     if (strcmp(replacement, confirmation) != 0) {
         puts("New passwords do not match.");
         return false;
