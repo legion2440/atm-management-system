@@ -12,6 +12,9 @@ printf '[PASS] Interest and date unit tests\n\n'
 bash "$ROOT/tests/core_flow.sh"
 printf '\n'
 
+bash "$ROOT/tests/edge_flow.sh"
+printf '\n'
+
 bash "$ROOT/tests/bonus_flow.sh"
 printf '\n'
 
