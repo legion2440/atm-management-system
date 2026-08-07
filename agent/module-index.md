@@ -11,5 +11,5 @@
 | Input helpers | `src/utils.c` | Safe line and numeric input parsing |
 | Notifications | `src/notify.c` | Cross-process transfer notification through POSIX FIFO |
 | Shared API | `src/header.h` | Shared types, constants and function declarations |
-| Mandatory audit | `tests/audit_flow.sh`, `tests/test_interest.c` | Official functional scenarios and interest rules |
-| Bonus evidence | `tests/bonus_flow.sh`, `tests/notification_flow.sh`, `BONUS_EVIDENCE.md` | Automated and documented bonus coverage |
+| Core verification | `tests/core_flow.sh`, `tests/test_interest.c`, `tests/verify.sh` | Named functional scenarios, interest rules and the single verification entry point |
+| Optional features | `tests/bonus_flow.sh`, `tests/notification_flow.sh`, `TEST_EVIDENCE.md` | Executable and documented coverage for extra project features |
