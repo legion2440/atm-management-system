@@ -9,6 +9,9 @@ printf '======================\n\n'
 "$ROOT/tests/bin/test_interest"
 printf '[PASS] Interest and date unit tests\n\n'
 
+"$ROOT/tests/bin/test_password"
+printf '[PASS] Password KDF unit tests\n\n'
+
 bash "$ROOT/tests/core_flow.sh"
 printf '\n'
 
