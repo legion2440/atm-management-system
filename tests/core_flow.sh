@@ -150,8 +150,11 @@ import sqlite3
 con = sqlite3.connect(os.environ["DB_PATH"])
 users = con.execute("SELECT id, name, password FROM users ORDER BY id").fetchall()
 assert len([row for row in users if row[1] == "Alice"]) == 1
+pattern = re.compile(r"pbkdf2-sha256\$100000\$[0-9a-f]{32}\$[0-9a-f]{64}")
+for name in ("Alice", "Michel", "Marcus"):
+    password = next(row[2] for row in users if row[1] == name)
+    assert pattern.fullmatch(password), (name, password)
 marcus = next(row for row in users if row[1] == "Marcus")
-assert re.fullmatch(r"sha256:[0-9a-f]{64}", marcus[2])
 assert "q1w2e3r4t5y6" not in marcus[2]
 row = con.execute(
     "SELECT u.name, a.account_number, a.country, a.phone, a.balance, a.type "
