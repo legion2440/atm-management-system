@@ -1,6 +1,6 @@
 # ATM Management System
 
-Терминальная ATM-система на C. Реализован весь обязательный scope 01-edu и все пункты официального bonus-аудита: relational database, улучшенный терминальный интерфейс, хэширование паролей, мгновенные уведомления, собственный Makefile, дополнительные функции и рефакторинг/оптимизация исходного starter-кода.
+Терминальная ATM-система на C. Реализован весь обязательный scope 01-edu и все пункты официального bonus-раздела: relational database, улучшенный терминальный интерфейс, хэширование паролей, мгновенные уведомления, собственный Makefile, дополнительные функции и рефакторинг/оптимизация исходного starter-кода.
 
 Основное runtime-хранилище — SQLite. Исходные текстовые файлы задания сохранены как seed и совместимый fallback.
 
@@ -17,7 +17,7 @@
 - [💰 Проценты](#-проценты)
 - [💾 Хранилище](#-хранилище)
 - [🔔 Уведомления](#-уведомления)
-- [🧪 Тесты и аудит](#-тесты-и-аудит)
+- [🧪 Тесты и проверка](#-тесты-и-проверка)
 - [📁 Структура](#-структура)
 - [⚠️ Примечания](#️-примечания)
 - [🧑‍💻 Автор](#-автор)
@@ -29,7 +29,7 @@
 - GCC или Clang с C11
 - GNU Make
 - SQLite development library
-- Bash и Python 3 для audit-скриптов
+- Bash и Python 3 для автоматических проверок
 - Linux / WSL для демонстрации FIFO-бонуса
 
 Ubuntu / WSL:
@@ -65,7 +65,7 @@ bash scripts/reset_data.sh
 
 ## 📝 О проекте
 
-Обязательные пункты меню оставлены на номерах 1–8, чтобы официальный audit выполнялся без специальных режимов:
+Обязательные пункты меню оставлены на номерах 1–8, чтобы официальный сценарий проверки выполнялся без специальных режимов:
 
 1. Создать счёт
 2. Обновить данные счёта
@@ -95,21 +95,21 @@ bash scripts/reset_data.sh
 
 ## 🎁 Бонусы
 
-| Bonus audit | Статус | Реализация |
+| Bonus | Статус | Реализация |
 | --- | --- | --- |
 | Мгновенное уведомление о transfer | ✅ | POSIX FIFO + child listener |
 | Обновлённый terminal interface | ✅ | TTY-aware ANSI colors, рамки, section headers |
 | Зашифрованный пароль | ✅ | SHA-256 |
 | Relational database | ✅ | SQLite `users` + `accounts`, FK, constraints, index |
-| Собственный Makefile | ✅ | build/test/sanitize/text-only targets |
+| Собственный Makefile | ✅ | build/verify/sanitize/text-only targets |
 | Дополнительные функции | ✅ | смена пароля + account summary |
 | Оптимизация исходного кода | ✅ | модульный рефакторинг, prepared statements, transactions, indexes, общий validation/rules layer |
 
-Полная карта evidence: [`BONUS_EVIDENCE.md`](BONUS_EVIDENCE.md).
+Полная карта evidence: [`TEST_EVIDENCE.md`](TEST_EVIDENCE.md).
 
 ## 💰 Проценты
 
-Расчёты совпадают с контрольными значениями официального audit-листа.
+Расчёты совпадают с контрольными значениями официального checklist.
 
 | Тип | Правило | Для `$1001.20`, дата `10/10/2012` |
 | --- | --- | --- |
@@ -176,26 +176,23 @@ make TEXT_ONLY=1
 [NOTIFICATION] You received account 777 from Alice.
 ```
 
-На native Windows transfer работает, но именно FIFO-бонус отключён. Для этого пункта audit используйте WSL/Linux.
+На native Windows transfer работает, но именно FIFO-бонус отключён. Для этого пункта используйте WSL/Linux.
 
-## 🧪 Тесты и аудит
+## 🧪 Тесты и проверка
 
-Полный прогон:
+Для проверяющего достаточно одной команды:
+
+```bash
+make verify
+```
+
+В выводе идут именованные `[PASS]` по регистрации, duplicate user, login, созданию счетов, обновлениям, всем процентным кейсам, ограничениям транзакций, overdraft, deposit/withdraw, удалению, transfer, persistence, SQLite, password storage, TUI, account summary, text fallback и instant notification.
+
+Чистая пересборка плюс тот же набор проверок:
 
 ```bash
 make check
 ```
-
-Проверяется:
-
-- unit-тест процентов и дат;
-- полный mandatory audit-flow на SQLite;
-- схема БД, FK и индекс;
-- TUI;
-- смена пароля;
-- account summary;
-- text fallback;
-- два одновременно запущенных процесса для instant notification.
 
 ASan + UBSan:
 
@@ -231,15 +228,16 @@ atm-management-system/
 │   ├── ui.c
 │   └── utils.c
 ├── tests/
-│   ├── audit_flow.sh
 │   ├── bonus_flow.sh
+│   ├── core_flow.sh
 │   ├── notification_flow.sh
-│   └── test_interest.c
+│   ├── test_interest.c
+│   └── verify.sh
 ├── AGENTS.md
-├── BONUS_EVIDENCE.md
 ├── Makefile
 ├── README.md
-└── README_RU.md
+├── README_RU.md
+└── TEST_EVIDENCE.md
 ```
 
 ## ⚠️ Примечания
