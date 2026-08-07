@@ -7,12 +7,11 @@ int main(void) {
         return 1;
     }
 
-    puts("============================");
-    puts("      ATM MANAGEMENT");
-    puts("============================");
+    ui_banner();
 
     for (;;) {
-        puts("\n1. Register");
+        ui_section("Main menu");
+        puts("1. Register");
         puts("2. Login");
         puts("3. Exit");
 
