@@ -14,7 +14,7 @@ TARGET := atm
 SRC := src/main.c src/auth.c src/system.c src/storage.c src/utils.c src/password.c src/account.c src/notify.c src/ui.c
 OBJ := $(SRC:.c=.o)
 
-.PHONY: all clean fclean re test verify check sanitize
+.PHONY: all clean fclean re test verify check sanitize reset-data demo
 
 all: $(TARGET)
 
@@ -30,7 +30,7 @@ tests/bin/test_interest: tests/test_interest.c src/account.c src/header.h
 
 tests/bin/test_password: tests/test_password.c src/password.c src/header.h
 	mkdir -p tests/bin
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_password.c src/password.c -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DATM_PASSWORD_TEST tests/test_password.c src/password.c -o $@
 
 tests/bin/test_concurrency: tests/test_concurrency.c src/storage.c src/account.c src/header.h
 	mkdir -p tests/bin
@@ -46,6 +46,13 @@ check: clean all verify
 sanitize: clean
 	$(CC) $(CPPFLAGS) -std=c11 -Wall -Wextra -Werror -pedantic -O1 -g -fsanitize=address,undefined $(SRC) $(LDLIBS) -o $(TARGET)
 	ASAN_OPTIONS=detect_leaks=1 bash tests/core_flow.sh
+
+reset-data:
+	bash scripts/reset_data.sh
+
+demo: $(TARGET)
+	bash scripts/reset_data.sh
+	./$(TARGET)
 
 clean:
 	rm -f $(OBJ)
