@@ -93,12 +93,12 @@ static void create_account(const User *user) {
         puts("Invalid date. Use dd/mm/yyyy.");
     }
 
-    if (!read_line("Country: ", account.country, sizeof(account.country)) || account.country[0] == '\0' || strchr(account.country, ' ') != NULL) {
+    if (!read_line("Country: ", account.country, sizeof(account.country)) || account.country[0] == '\0' || contains_whitespace(account.country)) {
         puts("Country must be a non-empty single token.");
         return;
     }
-    if (!read_line("Phone number: ", account.phone, sizeof(account.phone)) || account.phone[0] == '\0' || strchr(account.phone, ' ') != NULL) {
-        puts("Phone number must be non-empty and contain no spaces.");
+    if (!read_line("Phone number: ", account.phone, sizeof(account.phone)) || account.phone[0] == '\0' || contains_whitespace(account.phone)) {
+        puts("Phone number must be non-empty and contain no whitespace.");
         return;
     }
     if (!prompt_double("Initial deposit: $", &account.balance)) {
@@ -155,12 +155,12 @@ static void update_account(const User *user) {
     }
 
     if (choice == 1) {
-        if (!read_line("New phone number: ", accounts[index].phone, sizeof(accounts[index].phone)) || accounts[index].phone[0] == '\0' || strchr(accounts[index].phone, ' ') != NULL) {
+        if (!read_line("New phone number: ", accounts[index].phone, sizeof(accounts[index].phone)) || accounts[index].phone[0] == '\0' || contains_whitespace(accounts[index].phone)) {
             puts("Invalid phone number.");
             return;
         }
     } else if (choice == 2) {
-        if (!read_line("New country: ", accounts[index].country, sizeof(accounts[index].country)) || accounts[index].country[0] == '\0' || strchr(accounts[index].country, ' ') != NULL) {
+        if (!read_line("New country: ", accounts[index].country, sizeof(accounts[index].country)) || accounts[index].country[0] == '\0' || contains_whitespace(accounts[index].country)) {
             puts("Invalid country.");
             return;
         }
