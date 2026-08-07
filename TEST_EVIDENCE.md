@@ -22,10 +22,13 @@ The command runs:
 
 ```text
 interest/date unit tests
-named core functional cases against SQLite
+25 named core functional cases against SQLite
+20 boundary and rejection cases
 SQLite schema/FK/index + TUI + password change + summary + text fallback
 instant ownership-transfer notification with two active sessions
 ```
+
+Boundary coverage includes wrong credentials, negative and duplicate account numbers, negative initial balance, invalid dates and account types, whitespace-sensitive fields, zero/negative transaction amounts, invalid transaction actions, missing/self ownership transfers, failed password changes, access by a former owner after transfer, oversized input, malformed dates and leap-day maturity.
 
 `make check` performs a clean rebuild before running the same verification suite.
 
