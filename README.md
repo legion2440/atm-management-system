@@ -1,6 +1,6 @@
 # ATM Management System
 
-A terminal ATM management application written in C. It implements the complete mandatory 01-edu assignment and all items from the official bonus section: relational storage, improved terminal UI, encrypted passwords, instant transfer notifications, an original Makefile, extra features, and a refactored/optimized codebase.
+A terminal ATM management application written in C. It implements the complete mandatory 01-edu assignment and all items from the official bonus section: relational storage, improved terminal UI, protected password storage, instant transfer notifications, an original Makefile, extra features, and a refactored/optimized codebase.
 
 SQLite is the default runtime backend. The original text-file format is retained as a compatible fallback and as seed data for a fresh database.
 
@@ -13,6 +13,7 @@ SQLite is the default runtime backend. The original text-file format is retained
 - [🚀 Quick start](#-quick-start)
 - [📝 About](#-about)
 - [✨ Features](#-features)
+- [🔐 Security hardening](#-security-hardening)
 - [🎁 Bonus coverage](#-bonus-coverage)
 - [💰 Interest rules](#-interest-rules)
 - [💾 Storage](#-storage)
@@ -30,7 +31,7 @@ SQLite is the default runtime backend. The original text-file format is retained
 - GNU Make
 - SQLite development library
 - Bash and Python 3 for the automated verification scripts
-- Linux / WSL is recommended for the POSIX FIFO notification bonus
+- Linux / WSL is recommended for the POSIX FIFO notification and concurrency checks
 
 Ubuntu / WSL:
 
@@ -65,9 +66,9 @@ The repository contains two seed users:
 | `Alice` | `1234password` |
 | `Michel` | `password1234` |
 
-On the first start, `data/atm.db` is created and populated from the seed text files. Passwords are stored as SHA-256 hashes.
+On first start, `data/atm.db` is created and populated from the seed text files. Legacy seed credentials are accepted for compatibility and automatically upgraded to salted PBKDF2 after a successful login.
 
-Reset all local sample data:
+Reset all local sample data and login-security state:
 
 ```bash
 bash scripts/reset_data.sh
@@ -97,7 +98,9 @@ The implementation is split into small modules for account rules, authentication
 - register a new user;
 - reject duplicate usernames;
 - login using persisted credentials;
-- SHA-256 password storage;
+- salted PBKDF2-HMAC-SHA256 password storage;
+- automatic migration of legacy SHA-256/plaintext seed credentials after successful login;
+- persistent per-username lockout after repeated failed login attempts;
 - change password after verifying the current password.
 
 ### Accounts
@@ -118,7 +121,18 @@ The implementation is split into small modules for account rules, authentication
 - reject zero or negative amounts;
 - reject withdrawals above the available balance;
 - reject all transactions on fixed accounts;
-- persist the updated balance immediately.
+- serialize SQLite balance changes inside `BEGIN IMMEDIATE` transactions so concurrent writers cannot overwrite each other's balances.
+
+## 🔐 Security hardening
+
+The project includes several protections beyond the minimum functional requirements:
+
+- **Password KDF:** new passwords use `PBKDF2-HMAC-SHA256` with 100,000 iterations and an individual 128-bit salt. Equal passwords therefore produce different stored values.
+- **Credential migration:** legacy `sha256:` and plaintext seed records remain readable only for compatibility; a successful login replaces them with the PBKDF2 format.
+- **Brute-force protection:** five failed attempts for the same username create a 30-second lockout. The state is stored in SQLite, so restarting the program does not bypass the lock. `ATM_LOGIN_LOCK_SECONDS` exists for deterministic testing and controlled deployments.
+- **Authorization:** account mutations use both the authenticated `user_id` and account number, preventing operations on another user's account by number alone.
+- **SQL injection resistance:** SQLite writes use prepared statements and bound values rather than concatenating user input into SQL.
+- **Concurrent money safety:** deposits and withdrawals read, validate and update the balance while holding a SQLite write transaction. A multi-process test verifies that concurrent deposits are not lost and concurrent withdrawals cannot overdraw the account.
 
 ## 🎁 Bonus coverage
 
@@ -128,11 +142,11 @@ Every item from the official bonus section has concrete evidence:
 | --- | --- | --- |
 | Instant notification after ownership transfer | ✅ | POSIX FIFO listener, `tests/notification_flow.sh` |
 | Updated terminal interface | ✅ | TTY-aware ANSI colors, framed menus and section headers in `src/ui.c` |
-| Encrypted passwords | ✅ | SHA-256 in `src/password.c` |
+| Protected passwords | ✅ | salted PBKDF2 in `src/password.c`, migration and lockout in `src/auth.c` |
 | Relational database | ✅ | SQLite `users` + `accounts`, FK, constraints and index in `src/storage.c` |
 | Own Makefile | ✅ | build/verify/sanitize/text-only targets |
 | More features | ✅ | password change + account summary |
-| Optimized starter code | ✅ | modular refactor, reusable validation/rules, prepared statements, transactions, indexes, atomic text fallback |
+| Optimized starter code | ✅ | modular refactor, prepared statements, targeted writes, explicit transactions, indexes and reusable validation/rules |
 
 Detailed mapping: [`TEST_EVIDENCE.md`](TEST_EVIDENCE.md).
 
@@ -177,9 +191,14 @@ accounts
   phone
   balance CHECK(balance >= 0)
   type CHECK(valid type)
+
+login_security
+  name PRIMARY KEY
+  failed_attempts CHECK(failed_attempts >= 0)
+  locked_until CHECK(locked_until >= 0)
 ```
 
-`idx_accounts_user_id` indexes ownership lookups. Database writes use prepared statements and explicit transactions.
+`idx_accounts_user_id` indexes ownership lookups. User/account writes use prepared statements. Balance changes use explicit write transactions, while account create/update/delete/transfer operations use targeted SQL instead of rewriting the whole account table.
 
 When the database is empty, the application imports the assignment-compatible seed files:
 
@@ -203,7 +222,7 @@ make fclean
 make TEXT_ONLY=1
 ```
 
-The text backend uses temporary files plus `rename` for atomic replacement.
+The text backend keeps atomic file replacement and persistent login lockout state, but it is a compatibility backend and is not intended for multiple concurrent writers. Multi-process balance guarantees apply to the default SQLite backend.
 
 ## 🔔 Transfer notifications
 
@@ -225,11 +244,13 @@ For the evaluator, the shortest path is one command:
 make verify
 ```
 
-The suite reports named `[PASS]` checks from four layers:
+The suite reports named `[PASS]` checks from these layers:
 
 - unit boundary checks for dates, leap years, maturity dates and interest calculations;
 - 25 core functional cases for registration, login, account creation/update, interest, transactions, removals, ownership transfer and persistence;
 - 20 edge cases for invalid credentials/input, duplicate or negative account numbers, invalid dates/types, negative balances, zero/negative transactions, invalid actions, missing/self transfer, former-owner access, password-change failures, whitespace tokens, oversized input and persistent-state integrity after rejected operations;
+- 5 credential-security cases covering PBKDF2 migration, unique salts, persisted lockout and post-lock recovery;
+- 2 multi-process concurrency cases proving no lost deposits and no concurrent overdraft on SQLite;
 - optional-feature checks for SQLite schema/FK/index, password storage, TUI, account summary, text fallback and instant cross-session notification.
 
 A clean rebuild plus the same suite:
@@ -287,6 +308,8 @@ atm-management-system/
 │   ├── core_flow.sh
 │   ├── edge_flow.sh
 │   ├── notification_flow.sh
+│   ├── security_flow.sh
+│   ├── test_concurrency.c
 │   ├── test_interest.c
 │   └── verify.sh
 ├── AGENTS.md
@@ -299,8 +322,9 @@ atm-management-system/
 ## ⚠️ Notes
 
 - SQLite is the default runtime backend; `users.txt` and `records.txt` are seed/fallback storage, not the primary data after startup.
-- SHA-256 satisfies the educational password-encryption bonus. A production authentication system should use a salted slow password KDF such as Argon2, scrypt, or bcrypt.
-- Runtime SQLite files are ignored by Git and recreated from seed data after `scripts/reset_data.sh`.
+- PBKDF2 is implemented locally to keep the school project dependency-light. A production system would normally prefer a memory-hard KDF such as Argon2id and tune its cost to the deployment hardware.
+- The lockout is deliberately simple: five failures and 30 seconds. Real banking authentication would normally add broader rate limiting, monitoring, device/session controls and stronger operational protections.
+- Runtime SQLite and text-mode login-security files are ignored by Git and recreated after `scripts/reset_data.sh`.
 - The FIFO notification bonus is POSIX-specific; the rest of the project is independent of it.
 
 ## 🧑‍💻 Author
