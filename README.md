@@ -1,8 +1,8 @@
 # ATM Management System
 
-A terminal-based ATM management application written in C. It implements the complete mandatory 01-edu assignment: user registration and login, account creation and management, interest calculation, transactions, account removal, and ownership transfer.
+A terminal ATM management application written in C. It implements the complete mandatory 01-edu assignment and all items from the official bonus audit: relational storage, improved terminal UI, encrypted passwords, instant transfer notifications, an original Makefile, extra features, and a refactored/optimized codebase.
 
-The project keeps the assignment-compatible text-file storage, hashes passwords with SHA-256, and adds instant transfer notifications between two active POSIX terminals as a bonus.
+SQLite is the default runtime backend. The original text-file format is retained as a compatible fallback and as seed data for a fresh database.
 
 · [Русская версия](README_RU.md)  
 · [School repository](https://01.tomorrow-school.ai/git/nyestaye/atm-management-system)  
@@ -13,8 +13,9 @@ The project keeps the assignment-compatible text-file storage, hashes passwords 
 - [🚀 Quick start](#-quick-start)
 - [📝 About](#-about)
 - [✨ Features](#-features)
+- [🎁 Bonus coverage](#-bonus-coverage)
 - [💰 Interest rules](#-interest-rules)
-- [💾 Data storage](#-data-storage)
+- [💾 Storage](#-storage)
 - [🔔 Transfer notifications](#-transfer-notifications)
 - [🧪 Tests and audit](#-tests-and-audit)
 - [📁 Project structure](#-project-structure)
@@ -27,8 +28,16 @@ The project keeps the assignment-compatible text-file storage, hashes passwords 
 
 - GCC or Clang with C11 support
 - GNU Make
-- Bash for the test scripts
-- Linux / WSL is recommended for the POSIX notification bonus
+- SQLite development library
+- Bash and Python 3 for the automated audit scripts
+- Linux / WSL is recommended for the POSIX FIFO notification bonus
+
+Ubuntu / WSL:
+
+```bash
+sudo apt update
+sudo apt install build-essential libsqlite3-dev python3
+```
 
 ### Clone
 
@@ -49,18 +58,16 @@ make
 ./atm
 ```
 
-On native Windows with MinGW/Git Bash the executable may be named `atm.exe`.
-
-The repository starts with two sample users:
+The repository contains two seed users:
 
 | User | Password |
 | --- | --- |
 | `Alice` | `1234password` |
 | `Michel` | `password1234` |
 
-Their passwords are stored as SHA-256 hashes, not as plaintext.
+On the first start, `data/atm.db` is created and populated from the seed text files. Passwords are stored as SHA-256 hashes.
 
-To restore the sample data after manual testing:
+Reset all local sample data:
 
 ```bash
 bash scripts/reset_data.sh
@@ -68,144 +75,179 @@ bash scripts/reset_data.sh
 
 ## 📝 About
 
-The application follows the original ATM management assignment and uses a simple terminal interface. After login, a user can create and manage only their own accounts. Every mutating action is persisted immediately to the storage files.
-
-The main session menu contains:
+After login, a user can manage only their own accounts. Mandatory menu entries keep the same numeric positions used by the official audit:
 
 1. Create a new account
 2. Update account information
-3. Check one account and its interest
+3. Check one account and interest
 4. List owned accounts
-5. Deposit or withdraw money
+5. Make a transaction
 6. Remove an account
-7. Transfer account ownership
+7. Transfer ownership
 8. Logout
+9. Change password `[bonus]`
+10. Account summary `[bonus]`
 
-Account numbers are globally unique. Country and phone fields use single whitespace-free tokens because the original assignment storage format is whitespace-separated.
+The implementation is split into small modules for account rules, authentication, storage, input handling, notifications, UI, and session actions rather than keeping all starter logic in a few large functions.
 
 ## ✨ Features
 
 ### Authentication
 
-- register new users;
+- register a new user;
 - reject duplicate usernames;
-- login with saved credentials;
+- login using persisted credentials;
 - SHA-256 password storage;
-- compatibility with legacy plaintext password rows if such data is imported.
+- change password after verifying the current password.
 
-### Account management
+### Accounts
 
-- create `current`, `saving` / `savings`, `fixed01`, `fixed02`, and `fixed03` accounts;
-- update only the phone number or country, as required by the subject;
-- inspect one owned account at a time;
-- list all accounts owned by the logged-in user;
-- reject access to another user's account;
-- remove an existing owned account;
-- transfer ownership to another registered user.
+- `current`, `saving` / `savings`, `fixed01`, `fixed02`, `fixed03`;
+- globally unique account numbers;
+- update country or phone number;
+- inspect one owned account;
+- list all owned accounts;
+- remove an account;
+- transfer ownership to another registered user;
+- account summary with total balance and counts by account class.
 
 ### Transactions
 
-- deposit into `current` and `savings` accounts;
-- withdraw from `current` and `savings` accounts;
-- reject non-positive transaction amounts;
+- deposit into `current` and `savings`;
+- withdraw from `current` and `savings`;
+- reject zero or negative amounts;
 - reject withdrawals above the available balance;
-- reject all transactions for `fixed01`, `fixed02`, and `fixed03` accounts;
-- persist the new balance immediately.
+- reject all transactions on fixed accounts;
+- persist the updated balance immediately.
+
+## 🎁 Bonus coverage
+
+Every bonus question from the official audit has concrete evidence:
+
+| Bonus | Status | Evidence |
+| --- | --- | --- |
+| Instant notification after ownership transfer | ✅ | POSIX FIFO listener, `tests/notification_flow.sh` |
+| Updated terminal interface | ✅ | TTY-aware ANSI colors, framed menus and section headers in `src/ui.c` |
+| Encrypted passwords | ✅ | SHA-256 in `src/password.c` |
+| Relational database | ✅ | SQLite `users` + `accounts`, FK, constraints and index in `src/storage.c` |
+| Own Makefile | ✅ | build/test/sanitize/text-only targets |
+| More features | ✅ | password change + account summary |
+| Optimized starter code | ✅ | modular refactor, reusable validation/rules, prepared statements, transactions, indexes, atomic text fallback |
+
+Detailed mapping: [`BONUS_EVIDENCE.md`](BONUS_EVIDENCE.md).
 
 ## 💰 Interest rules
 
-The implementation follows the values required by the official audit.
+The calculations match the exact values used by the official audit.
 
-| Account type | Rule | Audit example for `$1001.20` created `10/10/2012` |
+| Type | Rule | Audit example for `$1001.20`, created `10/10/2012` |
 | --- | --- | --- |
-| `current` | no interest | no interest message |
-| `savings` | 7% annual rate, paid monthly | `$5.84` every month on day `10` |
+| `current` | no interest | no-interest message |
+| `savings` | 7% yearly, paid monthly | `$5.84` on day 10 every month |
 | `fixed01` | 4% × 1 year | `$40.05` on `10/10/2013` |
 | `fixed02` | 5% × 2 years | `$100.12` on `10/10/2014` |
 | `fixed03` | 8% × 3 years | `$240.29` on `10/10/2015` |
 
-`account.c` owns the account-type, date validation, maturity-date, and interest rules so the CLI and tests use the same calculations.
+The date and interest rules live in `src/account.c` and are shared by the CLI and tests.
 
-## 💾 Data storage
+## 💾 Storage
 
-The mandatory implementation uses the assignment's text-file model:
+### SQLite — default
 
-```text
-data/
-├── users.txt
-└── records.txt
-```
-
-`users.txt`:
+The application creates:
 
 ```text
-<id> <username> <password-hash>
+data/atm.db
 ```
 
-Example:
+Relational model:
 
 ```text
-0 Alice sha256:d84464181f7f019f3fb10e6bbd06f543d7ac84c4f8e360ebb9402a472ab30ebc
+users
+  id PRIMARY KEY
+  name UNIQUE
+  password
+
+accounts
+  id PRIMARY KEY
+  user_id FOREIGN KEY -> users(id)
+  account_number UNIQUE
+  created
+  country
+  phone
+  balance CHECK(balance >= 0)
+  type CHECK(valid type)
 ```
 
-`records.txt`:
+`idx_accounts_user_id` indexes ownership lookups. Database writes use prepared statements and explicit transactions.
+
+When the database is empty, the application imports the assignment-compatible seed files:
 
 ```text
-<id> <user_id> <owner> <account_number> <dd/mm/yyyy> <country> <phone> <balance> <type>
+data/users.txt
+data/records.txt
 ```
 
-Writes use a temporary file followed by `rename`, so an account update does not rewrite the live storage in place.
+### Text fallback
 
-Tests set `ATM_DATA_DIR` to a temporary directory, which keeps the repository's sample data unchanged.
+The original text storage remains usable:
+
+```bash
+ATM_STORAGE=text ./atm
+```
+
+A dependency-free text-only build is also available:
+
+```bash
+make fclean
+make TEXT_ONLY=1
+```
+
+The text backend uses temporary files plus `rename` for atomic replacement.
 
 ## 🔔 Transfer notifications
 
-On POSIX systems, logging in creates a per-user FIFO under `/tmp` and a small child listener process. If another active terminal transfers an account to that user, the receiver immediately sees a message similar to:
+On POSIX, login creates a per-user FIFO in `/tmp` and starts a listener child process. If another active session transfers an account to that user, the receiver immediately sees a message such as:
 
 ```text
 [NOTIFICATION] You received account 777 from Alice.
 ```
 
-This implements the assignment's instant-notification bonus without changing the mandatory storage format.
+This bonus is tested with two concurrent application sessions in `tests/notification_flow.sh`.
 
-The transfer itself works on all supported builds. Native Windows disables only the FIFO notification bonus; use WSL/Linux to test that audit item.
+Native Windows keeps ownership transfer itself but disables the POSIX FIFO listener. Use Linux or WSL to demonstrate this bonus.
 
 ## 🧪 Tests and audit
 
-Run all available checks:
+Run everything:
 
 ```bash
 make check
 ```
 
-This performs a clean build with:
+It executes:
+
+- interest/date unit tests;
+- the complete official mandatory audit flow against SQLite;
+- bonus checks for SQLite schema, foreign key, index, TUI, password change, account summary, and text fallback;
+- two-session instant notification flow.
+
+Compiler flags:
 
 ```text
 -std=c11 -Wall -Wextra -Werror -pedantic
 ```
 
-and then runs:
-
-- unit checks for date parsing and every official interest value;
-- a full scripted audit flow covering registration, duplicate users, login, create/update/check, all four interest examples, fixed-account restrictions, overdraft rejection, deposit/withdraw, remove, missing-account errors, and ownership transfer;
-- a two-process POSIX test proving that the receiving user gets the transfer notification immediately.
-
-Run AddressSanitizer and UndefinedBehaviorSanitizer against the main audit flow:
+ASan + UBSan mandatory-flow check:
 
 ```bash
 make sanitize
 ```
 
-The main executable audit scenario is in:
+CI also verifies that the project still builds without SQLite:
 
-```text
-tests/audit_flow.sh
-```
-
-The cross-terminal bonus scenario is in:
-
-```text
-tests/notification_flow.sh
+```bash
+make TEXT_ONLY=1
 ```
 
 ## 📁 Project structure
@@ -231,26 +273,27 @@ atm-management-system/
 │   ├── password.c
 │   ├── storage.c
 │   ├── system.c
+│   ├── ui.c
 │   └── utils.c
 ├── tests/
 │   ├── fixtures/
 │   ├── audit_flow.sh
+│   ├── bonus_flow.sh
 │   ├── notification_flow.sh
 │   └── test_interest.c
 ├── AGENTS.md
+├── BONUS_EVIDENCE.md
 ├── Makefile
 ├── README.md
 └── README_RU.md
 ```
 
-The repository is intentionally small: shared contracts are in `header.h`, business rules are isolated from interactive input, and persistence is centralized in `storage.c`.
-
 ## ⚠️ Notes
 
-- The required backend is the original text-file storage. SQLite is not used, so the optional relational-database bonus is not claimed.
-- SHA-256 is included for the educational password-protection bonus; a production authentication system should use a slow salted password KDF such as Argon2, scrypt, or bcrypt instead.
-- The FIFO notification bonus is POSIX-specific. The rest of the ATM functionality does not depend on it.
-- No external C libraries are required.
+- SQLite is the default runtime backend; `users.txt` and `records.txt` are seed/fallback storage, not the primary data after startup.
+- SHA-256 satisfies the educational password-encryption bonus. A production authentication system should use a salted slow password KDF such as Argon2, scrypt, or bcrypt.
+- Runtime SQLite files are ignored by Git and recreated from seed data after `scripts/reset_data.sh`.
+- The FIFO notification bonus is POSIX-specific; the rest of the project is independent of it.
 
 ## 🧑‍💻 Author
 
