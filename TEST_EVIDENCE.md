@@ -6,7 +6,7 @@ This file maps the optional project features and hardening work to concrete impl
 | --- | --- | --- |
 | Instant transfer notification | POSIX FIFO + listener child process | `src/notify.c`, `tests/notification_flow.sh` |
 | Updated terminal interface | TTY-aware ANSI colors, framed banner/session header and section layout | `src/ui.c`, `src/main.c`, `src/system.c`, `tests/bonus_flow.sh` |
-| Protected password storage | Salted PBKDF2-HMAC-SHA256 with legacy credential migration | `src/password.c`, `src/auth.c`, `tests/security_flow.sh`, `tests/bonus_flow.sh` |
+| Protected password storage | Salted PBKDF2-HMAC-SHA256 with legacy credential migration | `src/password.c`, `src/auth.c`, `tests/test_password.c`, `tests/security_flow.sh`, `tests/bonus_flow.sh` |
 | Brute-force protection | Five-failure persisted lockout stored in SQLite `login_security` | `src/auth.c`, `src/storage.c`, `tests/security_flow.sh` |
 | Relational database | SQLite default backend; `users` and `accounts` related by FK and indexed by owner | `src/storage.c`, `tests/bonus_flow.sh` |
 | Atomic money updates | SQLite balance mutation inside `BEGIN IMMEDIATE` transactions | `src/storage.c`, `src/system.c`, `tests/test_concurrency.c` |
@@ -24,6 +24,7 @@ The command runs:
 
 ```text
 interest/date unit tests
+password KDF known-vector unit tests
 25 named core functional cases against SQLite
 20 boundary and rejection cases
 5 credential-security cases
@@ -31,6 +32,8 @@ interest/date unit tests
 SQLite schema/FK/index + TUI + password change + summary + text fallback
 instant ownership-transfer notification with two active sessions
 ```
+
+The password unit test checks the PBKDF2 implementation against an independently calculated PBKDF2-HMAC-SHA256 vector, rejects an incorrect password and verifies that separate hashes of the same password use different salts.
 
 Security coverage includes PBKDF2 migration from legacy credentials, different salts for equal passwords, lockout after five failures, lockout persistence across process restarts and successful login after lock state is cleared.
 
