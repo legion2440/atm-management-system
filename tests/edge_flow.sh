@@ -67,12 +67,12 @@ Nobody
 7
 1000
 Alice
-9
+8
 wrong-password
-9
+8
 1234password
 
-9
+8
 1234password
 new-password
 different-password
@@ -83,13 +83,13 @@ Michel
 1000
 6
 1000
-8
+10
 2
 Michel
 password1234
 3
 1000
-8
+10
 1
 
 x
