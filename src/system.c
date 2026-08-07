@@ -12,6 +12,15 @@ static long find_owned_account(const Account *accounts, size_t count, const User
     return -1;
 }
 
+static bool account_number_exists(const Account *accounts, size_t count, long long number) {
+    for (size_t i = 0U; i < count; ++i) {
+        if (accounts[i].number == number) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void print_account(const Account *account) {
     printf("Account number: %lld\n", account->number);
     printf("Owner: %s\n", account->owner);
@@ -53,7 +62,7 @@ static void create_account(const User *user) {
     snprintf(account.owner, sizeof(account.owner), "%s", user->name);
 
     if (!prompt_long_long("Account number: ", &account.number)) return;
-    if (account.number < 0) {
+    if (account.number < 0 || account_number_exists(accounts, count, account.number)) {
         puts("This account number already exists or is invalid.");
         return;
     }
