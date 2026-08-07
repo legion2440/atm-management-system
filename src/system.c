@@ -58,6 +58,7 @@ static void print_interest(const Account *account) {
 }
 
 static void create_account(const User *user) {
+    ui_section("Create account");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
     if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
@@ -129,6 +130,7 @@ static void create_account(const User *user) {
 }
 
 static void update_account(const User *user) {
+    ui_section("Update account");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
     if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
@@ -175,6 +177,7 @@ static void update_account(const User *user) {
 }
 
 static void check_account(const User *user) {
+    ui_section("Account details");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
     if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
@@ -196,6 +199,7 @@ static void check_account(const User *user) {
 }
 
 static void list_accounts(const User *user) {
+    ui_section("Owned accounts");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
     if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
@@ -206,7 +210,7 @@ static void list_accounts(const User *user) {
     for (size_t i = 0U; i < count; ++i) {
         if (accounts[i].user_id == user->id) {
             if (found) {
-                puts("------------------------------");
+                puts("------------------------------------------");
             }
             print_account(&accounts[i]);
             found = true;
@@ -217,11 +221,45 @@ static void list_accounts(const User *user) {
     }
 }
 
+static void account_summary(const User *user) {
+    ui_section("Account summary");
+    Account accounts[ATM_MAX_ACCOUNTS];
+    size_t count;
+    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
+        return;
+    }
+
+    size_t owned = 0U;
+    size_t current = 0U;
+    size_t savings = 0U;
+    size_t fixed = 0U;
+    double total = 0.0;
+    for (size_t i = 0U; i < count; ++i) {
+        if (accounts[i].user_id != user->id) {
+            continue;
+        }
+        owned++;
+        total += accounts[i].balance;
+        if (accounts[i].type == ACCOUNT_CURRENT) {
+            current++;
+        } else if (accounts[i].type == ACCOUNT_SAVINGS) {
+            savings++;
+        } else {
+            fixed++;
+        }
+    }
+
+    printf("Accounts: %zu\n", owned);
+    printf("Total balance: $%.2f\n", total);
+    printf("Current: %zu | Savings: %zu | Fixed: %zu\n", current, savings, fixed);
+}
+
 static bool transactions_allowed(AccountType type) {
     return type == ACCOUNT_CURRENT || type == ACCOUNT_SAVINGS;
 }
 
 static void make_transaction(const User *user) {
+    ui_section("Transaction");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
     if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
@@ -279,6 +317,7 @@ static void make_transaction(const User *user) {
 }
 
 static void remove_account(const User *user) {
+    ui_section("Remove account");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
     if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
@@ -308,6 +347,7 @@ static void remove_account(const User *user) {
 }
 
 static void transfer_owner(const User *user) {
+    ui_section("Transfer ownership");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
     if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
@@ -355,7 +395,7 @@ static void transfer_owner(const User *user) {
 void account_menu(User *user, NotificationSession *notifications) {
     (void)notifications;
     for (;;) {
-        printf("\n=== ATM / %s ===\n", user->name);
+        ui_session_header(user);
         puts("1. Create a new account");
         puts("2. Update information of account");
         puts("3. Check account details");
@@ -364,6 +404,8 @@ void account_menu(User *user, NotificationSession *notifications) {
         puts("6. Remove existing account");
         puts("7. Transfer owner");
         puts("8. Logout");
+        puts("9. Change password [bonus]");
+        puts("10. Account summary [bonus]");
 
         int choice;
         if (!prompt_int("Choice: ", &choice)) {
@@ -394,6 +436,13 @@ void account_menu(User *user, NotificationSession *notifications) {
                 break;
             case 8:
                 return;
+            case 9:
+                ui_section("Change password");
+                (void)change_password_interactive(user);
+                break;
+            case 10:
+                account_summary(user);
+                break;
             default:
                 puts("Invalid choice.");
                 break;
