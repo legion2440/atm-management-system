@@ -1,6 +1,6 @@
 # ATM Management System
 
-A terminal ATM management application written in C. It implements the complete mandatory 01-edu assignment and all items from the official bonus audit: relational storage, improved terminal UI, encrypted passwords, instant transfer notifications, an original Makefile, extra features, and a refactored/optimized codebase.
+A terminal ATM management application written in C. It implements the complete mandatory 01-edu assignment and all items from the official bonus section: relational storage, improved terminal UI, encrypted passwords, instant transfer notifications, an original Makefile, extra features, and a refactored/optimized codebase.
 
 SQLite is the default runtime backend. The original text-file format is retained as a compatible fallback and as seed data for a fresh database.
 
@@ -17,7 +17,7 @@ SQLite is the default runtime backend. The original text-file format is retained
 - [💰 Interest rules](#-interest-rules)
 - [💾 Storage](#-storage)
 - [🔔 Transfer notifications](#-transfer-notifications)
-- [🧪 Tests and audit](#-tests-and-audit)
+- [🧪 Tests and verification](#-tests-and-verification)
 - [📁 Project structure](#-project-structure)
 - [⚠️ Notes](#️-notes)
 - [🧑‍💻 Author](#-author)
@@ -29,7 +29,7 @@ SQLite is the default runtime backend. The original text-file format is retained
 - GCC or Clang with C11 support
 - GNU Make
 - SQLite development library
-- Bash and Python 3 for the automated audit scripts
+- Bash and Python 3 for the automated verification scripts
 - Linux / WSL is recommended for the POSIX FIFO notification bonus
 
 Ubuntu / WSL:
@@ -75,7 +75,7 @@ bash scripts/reset_data.sh
 
 ## 📝 About
 
-After login, a user can manage only their own accounts. Mandatory menu entries keep the same numeric positions used by the official audit:
+After login, a user can manage only their own accounts. Mandatory menu entries keep the same numeric positions used by the official evaluation sequence:
 
 1. Create a new account
 2. Update account information
@@ -122,7 +122,7 @@ The implementation is split into small modules for account rules, authentication
 
 ## 🎁 Bonus coverage
 
-Every bonus question from the official audit has concrete evidence:
+Every item from the official bonus section has concrete evidence:
 
 | Bonus | Status | Evidence |
 | --- | --- | --- |
@@ -130,17 +130,17 @@ Every bonus question from the official audit has concrete evidence:
 | Updated terminal interface | ✅ | TTY-aware ANSI colors, framed menus and section headers in `src/ui.c` |
 | Encrypted passwords | ✅ | SHA-256 in `src/password.c` |
 | Relational database | ✅ | SQLite `users` + `accounts`, FK, constraints and index in `src/storage.c` |
-| Own Makefile | ✅ | build/test/sanitize/text-only targets |
+| Own Makefile | ✅ | build/verify/sanitize/text-only targets |
 | More features | ✅ | password change + account summary |
 | Optimized starter code | ✅ | modular refactor, reusable validation/rules, prepared statements, transactions, indexes, atomic text fallback |
 
-Detailed mapping: [`BONUS_EVIDENCE.md`](BONUS_EVIDENCE.md).
+Detailed mapping: [`TEST_EVIDENCE.md`](TEST_EVIDENCE.md).
 
 ## 💰 Interest rules
 
-The calculations match the exact values used by the official audit.
+The calculations match the exact reference values from the official checklist.
 
-| Type | Rule | Audit example for `$1001.20`, created `10/10/2012` |
+| Type | Rule | Reference for `$1001.20`, created `10/10/2012` |
 | --- | --- | --- |
 | `current` | no interest | no-interest message |
 | `savings` | 7% yearly, paid monthly | `$5.84` on day 10 every month |
@@ -217,20 +217,21 @@ This bonus is tested with two concurrent application sessions in `tests/notifica
 
 Native Windows keeps ownership transfer itself but disables the POSIX FIFO listener. Use Linux or WSL to demonstrate this bonus.
 
-## 🧪 Tests and audit
+## 🧪 Tests and verification
 
-Run everything:
+For the evaluator, the shortest path is one command:
+
+```bash
+make verify
+```
+
+The output lists named `[PASS]` checks for registration, duplicate users, login, account creation, updates, all interest cases, transaction restrictions, overdraft, deposit/withdraw, removals, ownership transfer, persistence, SQLite features, password storage, TUI, account summary, text fallback, and instant notification.
+
+A clean rebuild plus the same suite:
 
 ```bash
 make check
 ```
-
-It executes:
-
-- interest/date unit tests;
-- the complete official mandatory audit flow against SQLite;
-- bonus checks for SQLite schema, foreign key, index, TUI, password change, account summary, and text fallback;
-- two-session instant notification flow.
 
 Compiler flags:
 
@@ -238,7 +239,7 @@ Compiler flags:
 -std=c11 -Wall -Wextra -Werror -pedantic
 ```
 
-ASan + UBSan mandatory-flow check:
+ASan + UBSan core-flow check:
 
 ```bash
 make sanitize
@@ -277,15 +278,16 @@ atm-management-system/
 │   └── utils.c
 ├── tests/
 │   ├── fixtures/
-│   ├── audit_flow.sh
 │   ├── bonus_flow.sh
+│   ├── core_flow.sh
 │   ├── notification_flow.sh
-│   └── test_interest.c
+│   ├── test_interest.c
+│   └── verify.sh
 ├── AGENTS.md
-├── BONUS_EVIDENCE.md
 ├── Makefile
 ├── README.md
-└── README_RU.md
+├── README_RU.md
+└── TEST_EVIDENCE.md
 ```
 
 ## ⚠️ Notes
