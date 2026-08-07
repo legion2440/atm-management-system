@@ -28,7 +28,11 @@ tests/bin/test_interest: tests/test_interest.c src/account.c src/header.h
 	mkdir -p tests/bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_interest.c src/account.c -o $@
 
-verify: $(TARGET) tests/bin/test_interest
+tests/bin/test_concurrency: tests/test_concurrency.c src/storage.c src/account.c src/header.h
+	mkdir -p tests/bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_concurrency.c src/storage.c src/account.c $(LDLIBS) -o $@
+
+verify: $(TARGET) tests/bin/test_interest tests/bin/test_concurrency
 	bash tests/verify.sh
 
 test: verify
