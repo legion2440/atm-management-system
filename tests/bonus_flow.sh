@@ -28,9 +28,14 @@ INPUT
 
 grep -Fq '+==========================================+' "$TMP/output.txt"
 grep -Fq 'Storage: SQLite' "$TMP/output.txt"
+printf '[PASS] Framed terminal interface\n'
+
 grep -Fq 'Accounts: 0' "$TMP/output.txt"
+printf '[PASS] Account summary\n'
+
 grep -Fq 'Password changed successfully.' "$TMP/output.txt"
 [[ $(grep -Fc 'Welcome, Alice.' "$TMP/output.txt") -eq 2 ]]
+printf '[PASS] Authenticated password change\n'
 
 DB_PATH="$TMP/data/atm.db" python3 - <<'PY'
 import os
@@ -48,6 +53,8 @@ password = con.execute("SELECT password FROM users WHERE name='Alice'").fetchone
 assert re.fullmatch(r"sha256:[0-9a-f]{64}", password)
 assert password != "newpass123"
 PY
+printf '[PASS] Relational SQLite schema and index\n'
+printf '[PASS] Hashed password storage\n'
 
 mkdir -p "$TMP/text"
 cp "$ROOT/tests/fixtures/data/users.txt" "$TMP/text/users.txt"
@@ -57,5 +64,6 @@ ATM_STORAGE=text ATM_DATA_DIR="$TMP/text" ATM_NO_COLOR=1 "$ROOT/atm" >"$TMP/text
 INPUT
 grep -Fq 'Storage: text files' "$TMP/text.out"
 [[ ! -e "$TMP/text/atm.db" ]]
+printf '[PASS] Text storage fallback\n'
 
-printf 'bonus flow: OK\n'
+printf '\n6/6 bonus cases passed\n'
