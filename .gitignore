@@ -1,0 +1,12 @@
+atm
+atm.exe
+*.o
+*.obj
+*.out
+*.log
+*.tmp
+.DS_Store
+.vscode/
+.idea/
+coverage/
+tests/bin/
