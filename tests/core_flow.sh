@@ -87,12 +87,12 @@ KZ
 7
 3212
 Michel
-8
+10
 2
 Michel
 password1234
 4
-8
+10
 3
 INPUT
 

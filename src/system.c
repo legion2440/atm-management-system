@@ -348,9 +348,9 @@ void account_menu(User *user, NotificationSession *notifications) {
         puts("5. Make transaction");
         puts("6. Remove existing account");
         puts("7. Transfer owner");
-        puts("8. Logout");
-        puts("9. Change password [bonus]");
-        puts("10. Account summary [bonus]");
+        puts("8. Change password");
+        puts("9. Account summary");
+        puts("10. Logout");
 
         int choice;
         if (!prompt_int("Choice: ", &choice)) return;
@@ -363,12 +363,12 @@ void account_menu(User *user, NotificationSession *notifications) {
             case 5: make_transaction(user); break;
             case 6: remove_account(user); break;
             case 7: transfer_owner(user); break;
-            case 8: return;
-            case 9:
+            case 8:
                 ui_section("Change password");
                 (void)change_password_interactive(user);
                 break;
-            case 10: account_summary(user); break;
+            case 9: account_summary(user); break;
+            case 10: return;
             default: puts("Invalid choice."); break;
         }
     }

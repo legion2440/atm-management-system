@@ -45,7 +45,7 @@ Alice
 7
 777
 Michel
-8
+10
 3
 INPUT
 
@@ -57,7 +57,7 @@ for _ in $(seq 1 100); do
 done
 
 grep -Fq '[NOTIFICATION] You received account 777 from Alice.' "$TMP/michel.out"
-printf '8\n3\n' >&3
+printf '10\n3\n' >&3
 exec 3>&-
 wait "$MICHEL_PID"
 MICHEL_PID=''

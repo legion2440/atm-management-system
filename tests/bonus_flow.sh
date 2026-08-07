@@ -12,17 +12,17 @@ ATM_DATA_DIR="$TMP/data" ATM_NO_COLOR=1 "$ROOT/atm" >"$TMP/output.txt" <<'INPUT'
 2
 Alice
 1234password
-10
 9
+8
 1234password
 newpass123
 newpass123
-8
+10
 2
 Alice
 newpass123
+9
 10
-8
 3
 INPUT
 

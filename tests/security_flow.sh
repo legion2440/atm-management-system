@@ -12,7 +12,7 @@ ATM_DATA_DIR="$TMP/data" ATM_NO_COLOR=1 "$ROOT/atm" >"$TMP/setup.out" <<'INPUT'
 2
 Alice
 1234password
-8
+10
 1
 SaltOne
 shared-password
@@ -96,7 +96,7 @@ ATM_DATA_DIR="$TMP/data" ATM_NO_COLOR=1 "$ROOT/atm" >"$TMP/recovered.out" <<'INP
 2
 Alice
 1234password
-8
+10
 3
 INPUT
 grep -Fq 'Welcome, Alice.' "$TMP/recovered.out"
