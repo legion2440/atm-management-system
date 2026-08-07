@@ -25,6 +25,7 @@ void notification_send(const char *username, const char *message) {
 #else
 
 #include <ctype.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/stat.h>
@@ -103,8 +104,16 @@ void notification_send(const char *username, const char *message) {
     }
 
     size_t len = strlen(message);
-    if (len > 0U) {
-        (void)write(fd, message, len);
+    size_t offset = 0U;
+    while (offset < len) {
+        ssize_t written = write(fd, message + offset, len - offset);
+        if (written > 0) {
+            offset += (size_t)written;
+        } else if (written < 0 && errno == EINTR) {
+            continue;
+        } else {
+            break;
+        }
     }
     close(fd);
 }
