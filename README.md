@@ -225,7 +225,12 @@ For the evaluator, the shortest path is one command:
 make verify
 ```
 
-The output lists named `[PASS]` checks for registration, duplicate users, login, account creation, updates, all interest cases, transaction restrictions, overdraft, deposit/withdraw, removals, ownership transfer, persistence, SQLite features, password storage, TUI, account summary, text fallback, and instant notification.
+The suite reports named `[PASS]` checks from four layers:
+
+- unit boundary checks for dates, leap years, maturity dates and interest calculations;
+- 25 core functional cases for registration, login, account creation/update, interest, transactions, removals, ownership transfer and persistence;
+- 20 edge cases for invalid credentials/input, duplicate or negative account numbers, invalid dates/types, negative balances, zero/negative transactions, invalid actions, missing/self transfer, former-owner access, password-change failures, whitespace tokens, oversized input and persistent-state integrity after rejected operations;
+- optional-feature checks for SQLite schema/FK/index, password storage, TUI, account summary, text fallback and instant cross-session notification.
 
 A clean rebuild plus the same suite:
 
@@ -280,6 +285,7 @@ atm-management-system/
 │   ├── fixtures/
 │   ├── bonus_flow.sh
 │   ├── core_flow.sh
+│   ├── edge_flow.sh
 │   ├── notification_flow.sh
 │   ├── test_interest.c
 │   └── verify.sh
