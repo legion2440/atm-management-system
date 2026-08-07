@@ -28,11 +28,15 @@ tests/bin/test_interest: tests/test_interest.c src/account.c src/header.h
 	mkdir -p tests/bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_interest.c src/account.c -o $@
 
+tests/bin/test_password: tests/test_password.c src/password.c src/header.h
+	mkdir -p tests/bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_password.c src/password.c -o $@
+
 tests/bin/test_concurrency: tests/test_concurrency.c src/storage.c src/account.c src/header.h
 	mkdir -p tests/bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_concurrency.c src/storage.c src/account.c $(LDLIBS) -o $@
 
-verify: $(TARGET) tests/bin/test_interest tests/bin/test_concurrency
+verify: $(TARGET) tests/bin/test_interest tests/bin/test_password tests/bin/test_concurrency
 	bash tests/verify.sh
 
 test: verify
