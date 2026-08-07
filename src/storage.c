@@ -62,6 +62,7 @@ static bool text_load_users(User *users, size_t capacity, size_t *count) {
         perror("Unable to open users storage");
         return false;
     }
+
     *count = 0U;
     char line[512];
     while (fgets(line, sizeof(line), file) != NULL) {
@@ -82,12 +83,15 @@ static bool text_load_users(User *users, size_t capacity, size_t *count) {
 
 static bool text_save_users(const User *users, size_t count) {
     char path[ATM_PATH_LEN], temp[ATM_PATH_LEN];
-    if (!build_path(path, "users.txt") || snprintf(temp, sizeof(temp), "%s.tmp", path) >= (int)sizeof(temp)) return false;
+    if (!build_path(path, "users.txt") || snprintf(temp, sizeof(temp), "%s.tmp", path) >= (int)sizeof(temp)) {
+        return false;
+    }
     FILE *file = fopen(temp, "w");
     if (file == NULL) {
         perror("Unable to write users storage");
         return false;
     }
+
     bool ok = true;
     for (size_t i = 0U; i < count; ++i) {
         if (fprintf(file, "%d %s %s\n", users[i].id, users[i].name, users[i].password) < 0) {
@@ -119,6 +123,7 @@ static bool text_load_accounts(Account *accounts, size_t capacity, size_t *count
         perror("Unable to open account storage");
         return false;
     }
+
     *count = 0U;
     char line[768];
     while (fgets(line, sizeof(line), file) != NULL) {
@@ -144,12 +149,15 @@ static bool text_load_accounts(Account *accounts, size_t capacity, size_t *count
 
 static bool text_save_accounts(const Account *accounts, size_t count) {
     char path[ATM_PATH_LEN], temp[ATM_PATH_LEN];
-    if (!build_path(path, "records.txt") || snprintf(temp, sizeof(temp), "%s.tmp", path) >= (int)sizeof(temp)) return false;
+    if (!build_path(path, "records.txt") || snprintf(temp, sizeof(temp), "%s.tmp", path) >= (int)sizeof(temp)) {
+        return false;
+    }
     FILE *file = fopen(temp, "w");
     if (file == NULL) {
         perror("Unable to write account storage");
         return false;
     }
+
     bool ok = true;
     for (size_t i = 0U; i < count; ++i) {
         const Account *a = &accounts[i];
@@ -183,6 +191,7 @@ static bool text_load_security(LoginSecurity *entries, size_t capacity, size_t *
     FILE *file = fopen(path, "a+");
     if (file == NULL) return false;
     rewind(file);
+
     *count = 0U;
     char line[256];
     while (fgets(line, sizeof(line), file) != NULL) {
@@ -202,9 +211,12 @@ static bool text_load_security(LoginSecurity *entries, size_t capacity, size_t *
 
 static bool text_save_security(const LoginSecurity *entries, size_t count) {
     char path[ATM_PATH_LEN], temp[ATM_PATH_LEN];
-    if (!build_path(path, "login_security.txt") || snprintf(temp, sizeof(temp), "%s.tmp", path) >= (int)sizeof(temp)) return false;
+    if (!build_path(path, "login_security.txt") || snprintf(temp, sizeof(temp), "%s.tmp", path) >= (int)sizeof(temp)) {
+        return false;
+    }
     FILE *file = fopen(temp, "w");
     if (file == NULL) return false;
+
     bool ok = true;
     for (size_t i = 0U; i < count; ++i) {
         if (fprintf(file, "%s %d %lld\n", entries[i].name, entries[i].failed_attempts,
@@ -240,19 +252,6 @@ static bool sqlite_exec(sqlite3 *db, const char *sql) {
     return true;
 }
 
-static bool sqlite_open_db(sqlite3 **db) {
-    char path[ATM_PATH_LEN];
-    if (!build_path(path, "atm.db")) return false;
-    if (sqlite3_open(path, db) != SQLITE_OK) {
-        fprintf(stderr, "Unable to open SQLite database: %s\n", *db != NULL ? sqlite3_errmsg(*db) : "unknown error");
-        if (*db != NULL) sqlite3_close(*db);
-        *db = NULL;
-        return false;
-    }
-    sqlite3_busy_timeout(*db, 5000);
-    return sqlite_exec(*db, "PRAGMA foreign_keys = ON;");
-}
-
 static bool sqlite_create_schema(sqlite3 *db) {
     const char *schema =
         "CREATE TABLE IF NOT EXISTS users ("
@@ -276,9 +275,27 @@ static bool sqlite_create_schema(sqlite3 *db) {
     return sqlite_exec(db, schema);
 }
 
+static bool sqlite_open_ready(sqlite3 **db) {
+    char path[ATM_PATH_LEN];
+    if (!build_path(path, "atm.db")) return false;
+    if (sqlite3_open(path, db) != SQLITE_OK) {
+        fprintf(stderr, "Unable to open SQLite database: %s\n", *db != NULL ? sqlite3_errmsg(*db) : "unknown error");
+        if (*db != NULL) sqlite3_close(*db);
+        *db = NULL;
+        return false;
+    }
+    sqlite3_busy_timeout(*db, 5000);
+    if (!sqlite_exec(*db, "PRAGMA foreign_keys = ON;") || !sqlite_create_schema(*db)) {
+        sqlite3_close(*db);
+        *db = NULL;
+        return false;
+    }
+    return true;
+}
+
 static bool sqlite_load_users(sqlite3 *db, User *users, size_t capacity, size_t *count) {
     sqlite3_stmt *stmt = NULL;
-    if (sqlite3_prepare_v2(db, "SELECT id, name, password FROM users ORDER BY id", -1, &stmt, NULL) != SQLITE_OK) return false;
+    if (sqlite3_prepare_v2(db, "SELECT id,name,password FROM users ORDER BY id", -1, &stmt, NULL) != SQLITE_OK) return false;
     *count = 0U;
     int rc;
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
@@ -306,6 +323,7 @@ static bool sqlite_save_users(sqlite3 *db, const User *users, size_t count) {
         sqlite_exec(db, "ROLLBACK");
         return false;
     }
+
     bool ok = true;
     for (size_t i = 0U; i < count; ++i) {
         sqlite3_bind_int(stmt, 1, users[i].id);
@@ -344,15 +362,15 @@ static bool sqlite_load_accounts(sqlite3 *db, Account *accounts, size_t capacity
         snprintf(a->owner, sizeof(a->owner), "%s", (const char *)sqlite3_column_text(stmt, 2));
         a->number = (long long)sqlite3_column_int64(stmt, 3);
         const char *created = (const char *)sqlite3_column_text(stmt, 4);
-        const char *type = (const char *)sqlite3_column_text(stmt, 8);
-        if (created == NULL || type == NULL || !parse_date(created, &a->created)) {
+        const char *type_text = (const char *)sqlite3_column_text(stmt, 8);
+        if (created == NULL || type_text == NULL || !parse_date(created, &a->created)) {
             sqlite3_finalize(stmt);
             return false;
         }
         snprintf(a->country, sizeof(a->country), "%s", (const char *)sqlite3_column_text(stmt, 5));
         snprintf(a->phone, sizeof(a->phone), "%s", (const char *)sqlite3_column_text(stmt, 6));
         a->balance = sqlite3_column_double(stmt, 7);
-        a->type = account_type_from_string(type);
+        a->type = account_type_from_string(type_text);
         if (a->type == ACCOUNT_INVALID) {
             sqlite3_finalize(stmt);
             return false;
@@ -367,8 +385,7 @@ static bool sqlite_load_accounts(sqlite3 *db, Account *accounts, size_t capacity
 static bool sqlite_save_accounts(sqlite3 *db, const Account *accounts, size_t count) {
     const char *sql = "INSERT INTO accounts(id,user_id,account_number,created,country,phone,balance,type) VALUES(?,?,?,?,?,?,?,?)";
     sqlite3_stmt *stmt = NULL;
-    if (!sqlite_exec(db, "BEGIN IMMEDIATE")) return false;
-    if (!sqlite_exec(db, "DELETE FROM accounts")) {
+    if (!sqlite_exec(db, "BEGIN IMMEDIATE") || !sqlite_exec(db, "DELETE FROM accounts")) {
         sqlite_exec(db, "ROLLBACK");
         return false;
     }
@@ -376,6 +393,7 @@ static bool sqlite_save_accounts(sqlite3 *db, const Account *accounts, size_t co
         sqlite_exec(db, "ROLLBACK");
         return false;
     }
+
     bool ok = true;
     for (size_t i = 0U; i < count; ++i) {
         const Account *a = &accounts[i];
@@ -414,19 +432,18 @@ static bool sqlite_seed_if_empty(sqlite3 *db) {
     if (count > 0) return true;
 
     User users[ATM_MAX_USERS];
-    size_t user_count = 0U;
     Account accounts[ATM_MAX_ACCOUNTS];
-    size_t account_count = 0U;
-    if (!text_load_users(users, ATM_MAX_USERS, &user_count)) return false;
-    if (!text_load_accounts(accounts, ATM_MAX_ACCOUNTS, &account_count)) return false;
-    if (!sqlite_save_users(db, users, user_count)) return false;
-    return sqlite_save_accounts(db, accounts, account_count);
+    size_t user_count = 0U, account_count = 0U;
+    if (!text_load_users(users, ATM_MAX_USERS, &user_count) ||
+        !text_load_accounts(accounts, ATM_MAX_ACCOUNTS, &account_count)) {
+        return false;
+    }
+    return sqlite_save_users(db, users, user_count) && sqlite_save_accounts(db, accounts, account_count);
 }
 
 static StorageResult sqlite_create_user_record(sqlite3 *db, const char *name, const char *password_hash, User *created) {
     sqlite3_stmt *stmt = NULL;
     if (!sqlite_exec(db, "BEGIN IMMEDIATE")) return STORAGE_RESULT_ERROR;
-
     if (sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM users", -1, &stmt, NULL) != SQLITE_OK) {
         sqlite_exec(db, "ROLLBACK");
         return STORAGE_RESULT_ERROR;
@@ -501,10 +518,10 @@ static bool sqlite_login_locked_record(sqlite3 *db, const char *name, long long 
 static bool sqlite_login_failure_record(sqlite3 *db, const char *name, long long now, int max_attempts,
                                         long long lock_seconds, long long *locked_until) {
     if (!sqlite_exec(db, "BEGIN IMMEDIATE")) return false;
+
     sqlite3_stmt *stmt = NULL;
     int attempts = 0;
     long long until = 0LL;
-
     if (sqlite3_prepare_v2(db, "SELECT failed_attempts,locked_until FROM login_security WHERE name=?", -1, &stmt, NULL) != SQLITE_OK) {
         sqlite_exec(db, "ROLLBACK");
         return false;
@@ -521,7 +538,7 @@ static bool sqlite_login_failure_record(sqlite3 *db, const char *name, long long
     }
     sqlite3_finalize(stmt);
 
-    if (until <= now) {
+    if (until > 0LL && until <= now) {
         attempts = 0;
         until = 0LL;
     }
@@ -544,10 +561,11 @@ static bool sqlite_login_failure_record(sqlite3 *db, const char *name, long long
     sqlite3_bind_int64(stmt, 3, (sqlite3_int64)until);
     rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE || !sqlite_exec(db, "COMMIT")) {
+    if (rc != SQLITE_DONE) {
         sqlite_exec(db, "ROLLBACK");
         return false;
     }
+    if (!sqlite_exec(db, "COMMIT")) return false;
     if (locked_until != NULL) *locked_until = until;
     return true;
 }
@@ -600,11 +618,11 @@ static StorageResult sqlite_account_create_record(sqlite3 *db, const Account *a)
         sqlite_exec(db, "ROLLBACK");
         return STORAGE_RESULT_CONFLICT;
     }
-    if (rc != SQLITE_DONE || !sqlite_exec(db, "COMMIT")) {
+    if (rc != SQLITE_DONE) {
         sqlite_exec(db, "ROLLBACK");
         return STORAGE_RESULT_ERROR;
     }
-    return STORAGE_RESULT_OK;
+    return sqlite_exec(db, "COMMIT") ? STORAGE_RESULT_OK : STORAGE_RESULT_ERROR;
 }
 
 static StorageResult sqlite_account_update_contact_record(sqlite3 *db, int user_id, long long number,
@@ -630,8 +648,7 @@ static StorageResult sqlite_account_transaction_record(sqlite3 *db, int user_id,
     if (!sqlite_exec(db, "BEGIN IMMEDIATE")) return STORAGE_RESULT_ERROR;
 
     sqlite3_stmt *stmt = NULL;
-    const char *select_sql = "SELECT balance,type FROM accounts WHERE user_id=? AND account_number=?";
-    if (sqlite3_prepare_v2(db, select_sql, -1, &stmt, NULL) != SQLITE_OK) {
+    if (sqlite3_prepare_v2(db, "SELECT balance,type FROM accounts WHERE user_id=? AND account_number=?", -1, &stmt, NULL) != SQLITE_OK) {
         sqlite_exec(db, "ROLLBACK");
         return STORAGE_RESULT_ERROR;
     }
@@ -643,6 +660,7 @@ static StorageResult sqlite_account_transaction_record(sqlite3 *db, int user_id,
         sqlite_exec(db, "ROLLBACK");
         return rc == SQLITE_DONE ? STORAGE_RESULT_NOT_FOUND : STORAGE_RESULT_ERROR;
     }
+
     double balance = sqlite3_column_double(stmt, 0);
     const char *type_text = (const char *)sqlite3_column_text(stmt, 1);
     AccountType type = type_text != NULL ? account_type_from_string(type_text) : ACCOUNT_INVALID;
@@ -671,10 +689,11 @@ static StorageResult sqlite_account_transaction_record(sqlite3 *db, int user_id,
     rc = sqlite3_step(stmt);
     int changed = sqlite3_changes(db);
     sqlite3_finalize(stmt);
-    if (rc != SQLITE_DONE || changed != 1 || !sqlite_exec(db, "COMMIT")) {
+    if (rc != SQLITE_DONE || changed != 1) {
         sqlite_exec(db, "ROLLBACK");
         return STORAGE_RESULT_ERROR;
     }
+    if (!sqlite_exec(db, "COMMIT")) return STORAGE_RESULT_ERROR;
     if (new_balance != NULL) *new_balance = updated;
     return STORAGE_RESULT_OK;
 }
@@ -724,8 +743,9 @@ bool ensure_data_files(void) {
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        bool ok = sqlite_open_db(&db) && sqlite_create_schema(db) && sqlite_seed_if_empty(db);
-        if (db != NULL) sqlite3_close(db);
+        if (!sqlite_open_ready(&db)) return false;
+        bool ok = sqlite_seed_if_empty(db);
+        sqlite3_close(db);
         return ok;
     }
 #endif
@@ -736,8 +756,8 @@ bool load_users(User *users, size_t capacity, size_t *count) {
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return false;
-        bool ok = sqlite_create_schema(db) && sqlite_load_users(db, users, capacity, count);
+        if (!sqlite_open_ready(&db)) return false;
+        bool ok = sqlite_load_users(db, users, capacity, count);
         sqlite3_close(db);
         return ok;
     }
@@ -749,8 +769,8 @@ bool save_users(const User *users, size_t count) {
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return false;
-        bool ok = sqlite_create_schema(db) && sqlite_save_users(db, users, count);
+        if (!sqlite_open_ready(&db)) return false;
+        bool ok = sqlite_save_users(db, users, count);
         sqlite3_close(db);
         return ok;
     }
@@ -762,8 +782,8 @@ bool load_accounts(Account *accounts, size_t capacity, size_t *count) {
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return false;
-        bool ok = sqlite_create_schema(db) && sqlite_load_accounts(db, accounts, capacity, count);
+        if (!sqlite_open_ready(&db)) return false;
+        bool ok = sqlite_load_accounts(db, accounts, capacity, count);
         sqlite3_close(db);
         return ok;
     }
@@ -775,8 +795,8 @@ bool save_accounts(const Account *accounts, size_t count) {
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return false;
-        bool ok = sqlite_create_schema(db) && sqlite_save_accounts(db, accounts, count);
+        if (!sqlite_open_ready(&db)) return false;
+        bool ok = sqlite_save_accounts(db, accounts, count);
         sqlite3_close(db);
         return ok;
     }
@@ -788,10 +808,8 @@ StorageResult storage_create_user(const char *name, const char *password_hash, U
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return STORAGE_RESULT_ERROR;
-        StorageResult result = sqlite_create_schema(db)
-            ? sqlite_create_user_record(db, name, password_hash, created)
-            : STORAGE_RESULT_ERROR;
+        if (!sqlite_open_ready(&db)) return STORAGE_RESULT_ERROR;
+        StorageResult result = sqlite_create_user_record(db, name, password_hash, created);
         sqlite3_close(db);
         return result;
     }
@@ -819,10 +837,8 @@ StorageResult storage_update_password(int user_id, const char *name, const char 
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return STORAGE_RESULT_ERROR;
-        StorageResult result = sqlite_create_schema(db)
-            ? sqlite_update_password_record(db, user_id, name, password_hash)
-            : STORAGE_RESULT_ERROR;
+        if (!sqlite_open_ready(&db)) return STORAGE_RESULT_ERROR;
+        StorageResult result = sqlite_update_password_record(db, user_id, name, password_hash);
         sqlite3_close(db);
         return result;
     }
@@ -843,8 +859,8 @@ bool storage_login_locked(const char *name, long long now, long long *locked_unt
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return false;
-        bool locked = sqlite_create_schema(db) && sqlite_login_locked_record(db, name, now, locked_until);
+        if (!sqlite_open_ready(&db)) return false;
+        bool locked = sqlite_login_locked_record(db, name, now, locked_until);
         sqlite3_close(db);
         return locked;
     }
@@ -867,9 +883,8 @@ bool storage_login_failure(const char *name, long long now, int max_attempts, lo
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return false;
-        bool ok = sqlite_create_schema(db) &&
-                  sqlite_login_failure_record(db, name, now, max_attempts, lock_seconds, locked_until);
+        if (!sqlite_open_ready(&db)) return false;
+        bool ok = sqlite_login_failure_record(db, name, now, max_attempts, lock_seconds, locked_until);
         sqlite3_close(db);
         return ok;
     }
@@ -891,7 +906,7 @@ bool storage_login_failure(const char *name, long long now, int max_attempts, lo
         entries[index].locked_until = 0LL;
         count++;
     }
-    if (entries[index].locked_until <= now) {
+    if (entries[index].locked_until > 0LL && entries[index].locked_until <= now) {
         entries[index].failed_attempts = 0;
         entries[index].locked_until = 0LL;
     }
@@ -910,8 +925,8 @@ bool storage_login_success(const char *name) {
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return false;
-        bool ok = sqlite_create_schema(db) && sqlite_login_success_record(db, name);
+        if (!sqlite_open_ready(&db)) return false;
+        bool ok = sqlite_login_success_record(db, name);
         sqlite3_close(db);
         return ok;
     }
@@ -933,10 +948,8 @@ StorageResult storage_account_create(const Account *account) {
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return STORAGE_RESULT_ERROR;
-        StorageResult result = sqlite_create_schema(db)
-            ? sqlite_account_create_record(db, account)
-            : STORAGE_RESULT_ERROR;
+        if (!sqlite_open_ready(&db)) return STORAGE_RESULT_ERROR;
+        StorageResult result = sqlite_account_create_record(db, account);
         sqlite3_close(db);
         return result;
     }
@@ -960,10 +973,8 @@ StorageResult storage_account_update_contact(int user_id, long long number, bool
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return STORAGE_RESULT_ERROR;
-        StorageResult result = sqlite_create_schema(db)
-            ? sqlite_account_update_contact_record(db, user_id, number, update_phone, value)
-            : STORAGE_RESULT_ERROR;
+        if (!sqlite_open_ready(&db)) return STORAGE_RESULT_ERROR;
+        StorageResult result = sqlite_account_update_contact_record(db, user_id, number, update_phone, value);
         sqlite3_close(db);
         return result;
     }
@@ -986,10 +997,8 @@ StorageResult storage_account_transaction(int user_id, long long number, bool de
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return STORAGE_RESULT_ERROR;
-        StorageResult result = sqlite_create_schema(db)
-            ? sqlite_account_transaction_record(db, user_id, number, deposit, amount, new_balance)
-            : STORAGE_RESULT_ERROR;
+        if (!sqlite_open_ready(&db)) return STORAGE_RESULT_ERROR;
+        StorageResult result = sqlite_account_transaction_record(db, user_id, number, deposit, amount, new_balance);
         sqlite3_close(db);
         return result;
     }
@@ -1017,10 +1026,8 @@ StorageResult storage_account_delete(int user_id, long long number) {
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return STORAGE_RESULT_ERROR;
-        StorageResult result = sqlite_create_schema(db)
-            ? sqlite_account_delete_record(db, user_id, number)
-            : STORAGE_RESULT_ERROR;
+        if (!sqlite_open_ready(&db)) return STORAGE_RESULT_ERROR;
+        StorageResult result = sqlite_account_delete_record(db, user_id, number);
         sqlite3_close(db);
         return result;
     }
@@ -1042,36 +1049,33 @@ StorageResult storage_account_transfer(int user_id, long long number, int target
 #ifndef ATM_NO_SQLITE
     if (storage_uses_sqlite()) {
         sqlite3 *db = NULL;
-        if (!sqlite_open_db(&db)) return STORAGE_RESULT_ERROR;
-        StorageResult result = sqlite_create_schema(db)
-            ? sqlite_account_transfer_record(db, user_id, number, target_user_id)
-            : STORAGE_RESULT_ERROR;
+        if (!sqlite_open_ready(&db)) return STORAGE_RESULT_ERROR;
+        StorageResult result = sqlite_account_transfer_record(db, user_id, number, target_user_id);
         sqlite3_close(db);
         return result;
     }
 #endif
     Account accounts[ATM_MAX_ACCOUNTS];
-    size_t count = 0U;
-    if (!text_load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) return STORAGE_RESULT_ERROR;
-    User target;
-    if (!find_user_by_name("", NULL)) {
-        (void)target;
+    User users[ATM_MAX_USERS];
+    size_t count = 0U, user_count = 0U;
+    if (!text_load_accounts(accounts, ATM_MAX_ACCOUNTS, &count) ||
+        !text_load_users(users, ATM_MAX_USERS, &user_count)) {
+        return STORAGE_RESULT_ERROR;
     }
+
+    const char *target_name = NULL;
+    for (size_t i = 0U; i < user_count; ++i) {
+        if (users[i].id == target_user_id) {
+            target_name = users[i].name;
+            break;
+        }
+    }
+    if (target_name == NULL) return STORAGE_RESULT_CONFLICT;
+
     for (size_t i = 0U; i < count; ++i) {
         if (accounts[i].user_id == user_id && accounts[i].number == number) {
             accounts[i].user_id = target_user_id;
-            User users[ATM_MAX_USERS];
-            size_t user_count = 0U;
-            if (!text_load_users(users, ATM_MAX_USERS, &user_count)) return STORAGE_RESULT_ERROR;
-            bool found = false;
-            for (size_t j = 0U; j < user_count; ++j) {
-                if (users[j].id == target_user_id) {
-                    snprintf(accounts[i].owner, sizeof(accounts[i].owner), "%s", users[j].name);
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) return STORAGE_RESULT_CONFLICT;
+            snprintf(accounts[i].owner, sizeof(accounts[i].owner), "%s", target_name);
             return text_save_accounts(accounts, count) ? STORAGE_RESULT_OK : STORAGE_RESULT_ERROR;
         }
     }
