@@ -3,7 +3,7 @@ set -euo pipefail
 
 case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*)
-        echo "notification flow: SKIP (POSIX FIFO bonus is disabled on native Windows)"
+        echo "[SKIP] Instant transfer notification (POSIX FIFO is disabled on native Windows)"
         exit 0
         ;;
 esac
@@ -62,4 +62,4 @@ exec 3>&-
 wait "$MICHEL_PID"
 MICHEL_PID=''
 
-printf 'notification flow: OK\n'
+printf '[PASS] Instant transfer notification\n'
