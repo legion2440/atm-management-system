@@ -118,16 +118,11 @@ static void sha256_final(Sha256 *ctx, uint8_t hash[SHA256_LEN]) {
     ctx->data[i++] = 0x80U;
 
     if (i > 56U) {
-        while (i < 64U) {
-            ctx->data[i++] = 0U;
-        }
+        while (i < 64U) ctx->data[i++] = 0U;
         transform(ctx, ctx->data);
         i = 0U;
     }
-
-    while (i < 56U) {
-        ctx->data[i++] = 0U;
-    }
+    while (i < 56U) ctx->data[i++] = 0U;
 
     ctx->bit_len += (uint64_t)ctx->data_len * 8U;
     for (uint32_t shift = 0U; shift < 8U; ++shift) {
@@ -153,11 +148,8 @@ static void sha256_bytes(const uint8_t *data, size_t len, uint8_t hash[SHA256_LE
 static void hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len,
                         uint8_t output[SHA256_LEN]) {
     uint8_t key_block[64] = {0};
-    if (key_len > sizeof(key_block)) {
-        sha256_bytes(key, key_len, key_block);
-    } else {
-        memcpy(key_block, key, key_len);
-    }
+    if (key_len > sizeof(key_block)) sha256_bytes(key, key_len, key_block);
+    else memcpy(key_block, key, key_len);
 
     uint8_t inner_pad[64];
     uint8_t outer_pad[64];
@@ -191,14 +183,11 @@ static void pbkdf2_sha256(const char *password, const uint8_t salt[PBKDF2_SALT_L
     uint8_t u[SHA256_LEN];
     hmac_sha256((const uint8_t *)password, strlen(password), block, sizeof(block), u);
     memcpy(output, u, SHA256_LEN);
-
     for (uint32_t round = 1U; round < iterations; ++round) {
         uint8_t next[SHA256_LEN];
         hmac_sha256((const uint8_t *)password, strlen(password), u, sizeof(u), next);
         memcpy(u, next, sizeof(u));
-        for (size_t i = 0U; i < SHA256_LEN; ++i) {
-            output[i] ^= u[i];
-        }
+        for (size_t i = 0U; i < SHA256_LEN; ++i) output[i] ^= u[i];
     }
 }
 
@@ -230,9 +219,7 @@ static bool hex_decode(const char *input, size_t bytes, uint8_t *output) {
 
 static bool secure_equal(const uint8_t *left, const uint8_t *right, size_t len) {
     uint8_t diff = 0U;
-    for (size_t i = 0U; i < len; ++i) {
-        diff |= (uint8_t)(left[i] ^ right[i]);
-    }
+    for (size_t i = 0U; i < len; ++i) diff |= (uint8_t)(left[i] ^ right[i]);
     return diff == 0U;
 }
 
@@ -244,7 +231,7 @@ static void generate_salt(uint8_t salt[PBKDF2_SALT_LEN]) {
         long pid;
         uintptr_t address;
         uint64_t sequence;
-    } seed;
+    } seed = {0};
     seed.wall = time(NULL);
     seed.cpu = clock();
     seed.pid = (long)ATM_GETPID();
@@ -289,16 +276,12 @@ bool password_matches(const char *password, const char *stored) {
         char extra;
         int parsed = sscanf(stored, "pbkdf2-sha256$%u$%32[0-9a-fA-F]$%64[0-9a-fA-F]%c",
                             &iterations, salt_hex, hash_hex, &extra);
-        if (parsed != 3 || iterations == 0U || iterations > 1000000U) {
-            return false;
-        }
+        if (parsed != 3 || iterations == 0U || iterations > 1000000U) return false;
 
         uint8_t salt[PBKDF2_SALT_LEN];
         uint8_t expected[SHA256_LEN];
         uint8_t actual[SHA256_LEN];
-        if (!hex_decode(salt_hex, sizeof(salt), salt) || !hex_decode(hash_hex, sizeof(expected), expected)) {
-            return false;
-        }
+        if (!hex_decode(salt_hex, sizeof(salt), salt) || !hex_decode(hash_hex, sizeof(expected), expected)) return false;
         pbkdf2_sha256(password, salt, iterations, actual);
         return secure_equal(actual, expected, sizeof(actual));
     }
