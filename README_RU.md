@@ -40,7 +40,7 @@ sudo apt update
 sudo apt install build-essential libsqlite3-dev python3
 ```
 
-Сборка и запуск:
+Сборка и обычный запуск:
 
 ```bash
 git clone https://01.tomorrow-school.ai/git/nyestaye/atm-management-system
@@ -48,6 +48,14 @@ cd atm-management-system
 make
 ./atm
 ```
+
+Для чистого ручного/demo-запуска из sample data:
+
+```bash
+make demo
+```
+
+`make demo` восстанавливает sample users/accounts, очищает runtime SQLite и login-security state, принудительно использует SQLite и каталог `data/` текущего репозитория, после чего запускает `./atm`.
 
 Seed-пользователи:
 
@@ -58,15 +66,17 @@ Seed-пользователи:
 
 При первом запуске создаётся `data/atm.db`, данные импортируются из seed-файлов. Старые seed-credentials читаются для совместимости и после успешного login автоматически мигрируют на salted PBKDF2.
 
-Сбросить sample data и состояние login security:
+Сбросить sample data и состояние login security без запуска приложения:
 
 ```bash
-bash scripts/reset_data.sh
+make reset-data
 ```
+
+Этот target внутри вызывает `scripts/reset_data.sh`.
 
 ## 📝 О проекте
 
-Обязательные пункты меню оставлены на номерах 1–8, чтобы официальный сценарий проверки выполнялся без специальных режимов:
+После входа пользователь может работать только со своими счетами. Актуальное меню:
 
 1. Создать счёт
 2. Обновить данные счёта
@@ -75,9 +85,9 @@ bash scripts/reset_data.sh
 5. Выполнить транзакцию
 6. Удалить счёт
 7. Передать владельца
-8. Logout
-9. Сменить пароль `[bonus]`
-10. Сводка по счетам `[bonus]`
+8. Сменить пароль
+9. Сводка по счетам
+10. Logout
 
 Код разделён на отдельные модули account rules, auth, persistence, input, notification, UI и session actions.
 
@@ -115,7 +125,7 @@ bash scripts/reset_data.sh
 | Обновлённый terminal interface | ✅ | TTY-aware ANSI colors, рамки, section headers |
 | Защищённые пароли | ✅ | salted PBKDF2 + migration + lockout |
 | Relational database | ✅ | SQLite `users` + `accounts`, FK, constraints, index |
-| Собственный Makefile | ✅ | build/verify/sanitize/text-only targets |
+| Собственный Makefile | ✅ | build/verify/sanitize/text-only/demo/reset-data targets |
 | Дополнительные функции | ✅ | смена пароля + account summary |
 | Оптимизация исходного кода | ✅ | модульный рефакторинг, prepared statements, targeted writes, transactions, indexes, общий validation/rules layer |
 
@@ -228,6 +238,12 @@ ASan + UBSan:
 make sanitize
 ```
 
+Для чистого интерактивного smoke-test после автоматических проверок:
+
+```bash
+make demo
+```
+
 CI дополнительно собирает text-only вариант:
 
 ```bash
@@ -274,9 +290,10 @@ atm-management-system/
 ## ⚠️ Примечания
 
 - `atm.db` — основное runtime-хранилище; `users.txt` и `records.txt` являются seed/fallback.
+- `make demo` намеренно сбрасывает локальное sample/runtime state перед запуском. Если текущую локальную БД нужно сохранить, запускайте обычный `./atm`.
 - PBKDF2 реализован внутри проекта, чтобы не добавлять тяжёлую внешнюю dependency. В production обычно предпочитают memory-hard KDF вроде Argon2id и подбирают cost под железо.
 - Lockout здесь намеренно простой: 5 ошибок и 30 секунд. В реальной банковской системе дополнительно нужны rate limiting, monitoring, device/session controls и operational security.
-- Runtime SQLite и text-mode login-security files находятся в `.gitignore` и пересоздаются после `scripts/reset_data.sh`.
+- Runtime SQLite и text-mode login-security files находятся в `.gitignore` и пересоздаются после `make reset-data` / `scripts/reset_data.sh`.
 - FIFO notification — POSIX-specific, остальная логика от него не зависит.
 
 ## 🧑‍💻 Автор

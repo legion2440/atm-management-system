@@ -59,6 +59,14 @@ make
 ./atm
 ```
 
+For a clean manual/demo run from the repository sample data:
+
+```bash
+make demo
+```
+
+`make demo` restores the sample users/accounts, clears runtime SQLite/login-security state, forces the default SQLite backend to use the repository `data/` directory, and then starts `./atm`.
+
 The repository contains two seed users:
 
 | User | Password |
@@ -68,15 +76,17 @@ The repository contains two seed users:
 
 On first start, `data/atm.db` is created and populated from the seed text files. Legacy seed credentials are accepted for compatibility and automatically upgraded to salted PBKDF2 after a successful login.
 
-Reset all local sample data and login-security state:
+Reset all local sample data and login-security state without starting the application:
 
 ```bash
-bash scripts/reset_data.sh
+make reset-data
 ```
+
+The target calls `scripts/reset_data.sh` internally.
 
 ## 📝 About
 
-After login, a user can manage only their own accounts. Mandatory menu entries keep the same numeric positions used by the official evaluation sequence:
+After login, a user can manage only their own accounts. The account menu is:
 
 1. Create a new account
 2. Update account information
@@ -85,9 +95,9 @@ After login, a user can manage only their own accounts. Mandatory menu entries k
 5. Make a transaction
 6. Remove an account
 7. Transfer ownership
-8. Logout
-9. Change password `[bonus]`
-10. Account summary `[bonus]`
+8. Change password
+9. Account summary
+10. Logout
 
 The implementation is split into small modules for account rules, authentication, storage, input handling, notifications, UI, and session actions rather than keeping all starter logic in a few large functions.
 
@@ -144,7 +154,7 @@ Every item from the official bonus section has concrete evidence:
 | Updated terminal interface | ✅ | TTY-aware ANSI colors, framed menus and section headers in `src/ui.c` |
 | Protected passwords | ✅ | salted PBKDF2 in `src/password.c`, migration and lockout in `src/auth.c` |
 | Relational database | ✅ | SQLite `users` + `accounts`, FK, constraints and index in `src/storage.c` |
-| Own Makefile | ✅ | build/verify/sanitize/text-only targets |
+| Own Makefile | ✅ | build/verify/sanitize/text-only/demo/reset-data targets |
 | More features | ✅ | password change + account summary |
 | Optimized starter code | ✅ | modular refactor, prepared statements, targeted writes, explicit transactions, indexes and reusable validation/rules |
 
@@ -271,6 +281,12 @@ ASan + UBSan core-flow check:
 make sanitize
 ```
 
+For a clean interactive smoke test after automated checks:
+
+```bash
+make demo
+```
+
 CI also verifies that the project still builds without SQLite:
 
 ```bash
@@ -322,9 +338,10 @@ atm-management-system/
 ## ⚠️ Notes
 
 - SQLite is the default runtime backend; `users.txt` and `records.txt` are seed/fallback storage, not the primary data after startup.
+- `make demo` is intentionally destructive to local sample/runtime state: it restores the repository fixtures before starting the application. Use plain `./atm` when you want to keep the current local database.
 - PBKDF2 is implemented locally to keep the school project dependency-light. A production system would normally prefer a memory-hard KDF such as Argon2id and tune its cost to the deployment hardware.
 - The lockout is deliberately simple: five failures and 30 seconds. Real banking authentication would normally add broader rate limiting, monitoring, device/session controls and stronger operational protections.
-- Runtime SQLite and text-mode login-security files are ignored by Git and recreated after `scripts/reset_data.sh`.
+- Runtime SQLite and text-mode login-security files are ignored by Git and recreated after `make reset-data` / `scripts/reset_data.sh`.
 - The FIFO notification bonus is POSIX-specific; the rest of the project is independent of it.
 
 ## 🧑‍💻 Author
