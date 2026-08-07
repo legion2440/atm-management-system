@@ -97,12 +97,13 @@ password1234
 INPUT
 
 passed=0
+expected=25
 check_text() {
     local label=$1
-    local expected=$2
-    if ! grep -Fq "$expected" "$TMP/output.txt"; then
+    local expected_text=$2
+    if ! grep -Fq "$expected_text" "$TMP/output.txt"; then
         printf '[FAIL] %s\n' "$label"
-        printf 'Expected output: %s\n' "$expected"
+        printf 'Expected output: %s\n' "$expected_text"
         exit 1
     fi
     printf '[PASS] %s\n' "$label"
@@ -161,4 +162,8 @@ PY
 printf '[PASS] Persist credentials and ownership\n'
 passed=$((passed + 1))
 
-printf '\n%d/%d core cases passed\n' "$passed" "$passed"
+if [[ $passed -ne $expected ]]; then
+    printf '[FAIL] Expected %d core cases, completed %d\n' "$expected" "$passed"
+    exit 1
+fi
+printf '\n%d/%d core cases passed\n' "$passed" "$expected"
