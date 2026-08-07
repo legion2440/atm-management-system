@@ -44,17 +44,17 @@ import sqlite3
 
 con = sqlite3.connect(os.environ["DB_PATH"])
 tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-assert {"users", "accounts"}.issubset(tables)
+assert {"users", "accounts", "login_security"}.issubset(tables)
 indexes = {row[1] for row in con.execute("PRAGMA index_list(accounts)")}
 assert "idx_accounts_user_id" in indexes
 foreign_keys = con.execute("PRAGMA foreign_key_list(accounts)").fetchall()
 assert any(row[2] == "users" and row[3] == "user_id" for row in foreign_keys)
 password = con.execute("SELECT password FROM users WHERE name='Alice'").fetchone()[0]
-assert re.fullmatch(r"sha256:[0-9a-f]{64}", password)
+assert re.fullmatch(r"pbkdf2-sha256\$100000\$[0-9a-f]{32}\$[0-9a-f]{64}", password)
 assert password != "newpass123"
 PY
 printf '[PASS] Relational SQLite schema and index\n'
-printf '[PASS] Hashed password storage\n'
+printf '[PASS] Salted password storage\n'
 
 mkdir -p "$TMP/text"
 cp "$ROOT/tests/fixtures/data/users.txt" "$TMP/text/users.txt"
