@@ -1,7 +1,26 @@
 #include "header.h"
 
+#include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#define LOGIN_MAX_ATTEMPTS 5
+#define LOGIN_LOCK_SECONDS 30LL
+
+static long long login_lock_seconds(void) {
+    const char *configured = getenv("ATM_LOGIN_LOCK_SECONDS");
+    if (configured == NULL || *configured == '\0') return LOGIN_LOCK_SECONDS;
+
+    char *end = NULL;
+    errno = 0;
+    long long seconds = strtoll(configured, &end, 10);
+    if (errno != 0 || end == configured || *end != '\0' || seconds < 1LL || seconds > 86400LL) {
+        return LOGIN_LOCK_SECONDS;
+    }
+    return seconds;
+}
 
 bool find_user_by_name(const char *name, User *user) {
     User users[ATM_MAX_USERS];
@@ -22,12 +41,6 @@ bool find_user_by_name(const char *name, User *user) {
 }
 
 bool register_user_interactive(void) {
-    User users[ATM_MAX_USERS];
-    size_t count;
-    if (!load_users(users, ATM_MAX_USERS, &count)) {
-        return false;
-    }
-
     char name[ATM_NAME_LEN];
     char password[ATM_PASSWORD_LEN];
     if (!read_line("Username: ", name, sizeof(name)) || !read_line("Password: ", password, sizeof(password))) {
@@ -39,29 +52,18 @@ bool register_user_interactive(void) {
         return false;
     }
 
-    int max_id = -1;
-    for (size_t i = 0U; i < count; ++i) {
-        if (strcmp(users[i].name, name) == 0) {
-            printf("User '%s' already exists.\n", name);
-            return false;
-        }
-        if (users[i].id > max_id) {
-            max_id = users[i].id;
-        }
+    char password_hash[ATM_PASSWORD_LEN];
+    hash_password(password, password_hash);
+    StorageResult result = storage_create_user(name, password_hash, NULL);
+    if (result == STORAGE_RESULT_CONFLICT) {
+        printf("User '%s' already exists.\n", name);
+        return false;
     }
-
-    if (count >= ATM_MAX_USERS) {
+    if (result == STORAGE_RESULT_FULL) {
         puts("User storage is full.");
         return false;
     }
-
-    User new_user;
-    new_user.id = max_id + 1;
-    snprintf(new_user.name, sizeof(new_user.name), "%s", name);
-    hash_password(password, new_user.password);
-    users[count++] = new_user;
-
-    if (!save_users(users, count)) {
+    if (result != STORAGE_RESULT_OK) {
         puts("Registration failed while saving data.");
         return false;
     }
@@ -83,33 +85,52 @@ bool login_user_interactive(User *user) {
         return false;
     }
 
-    for (size_t i = 0U; i < count; ++i) {
-        if (strcmp(users[i].name, name) == 0 && password_matches(password, users[i].password)) {
-            *user = users[i];
-            printf("Welcome, %s.\n", user->name);
-            return true;
-        }
+    long long now = (long long)time(NULL);
+    long long locked_until = 0LL;
+    if (storage_login_locked(name, now, &locked_until)) {
+        puts("Too many failed login attempts. Try again later.");
+        return false;
     }
 
-    puts("Invalid username or password.");
+    for (size_t i = 0U; i < count; ++i) {
+        if (strcmp(users[i].name, name) != 0 || !password_matches(password, users[i].password)) {
+            continue;
+        }
+
+        if (password_needs_upgrade(users[i].password)) {
+            char upgraded[ATM_PASSWORD_LEN];
+            hash_password(password, upgraded);
+            if (storage_update_password(users[i].id, users[i].name, upgraded) != STORAGE_RESULT_OK) {
+                puts("Login failed while upgrading stored credentials.");
+                return false;
+            }
+            snprintf(users[i].password, sizeof(users[i].password), "%s", upgraded);
+        }
+        if (!storage_login_success(name)) {
+            puts("Login failed while updating security state.");
+            return false;
+        }
+        *user = users[i];
+        printf("Welcome, %s.\n", user->name);
+        return true;
+    }
+
+    locked_until = 0LL;
+    if (!storage_login_failure(name, now, LOGIN_MAX_ATTEMPTS, login_lock_seconds(), &locked_until)) {
+        puts("Login failed while updating security state.");
+        return false;
+    }
+    if (locked_until > now) {
+        puts("Too many failed login attempts. Try again later.");
+    } else {
+        puts("Invalid username or password.");
+    }
     return false;
 }
 
 bool change_password_interactive(User *user) {
-    User users[ATM_MAX_USERS];
-    size_t count;
-    if (!load_users(users, ATM_MAX_USERS, &count)) {
-        return false;
-    }
-
-    size_t index = count;
-    for (size_t i = 0U; i < count; ++i) {
-        if (users[i].id == user->id && strcmp(users[i].name, user->name) == 0) {
-            index = i;
-            break;
-        }
-    }
-    if (index == count) {
+    User current_user;
+    if (!find_user_by_name(user->name, &current_user) || current_user.id != user->id) {
         puts("Current user no longer exists.");
         return false;
     }
@@ -120,7 +141,7 @@ bool change_password_interactive(User *user) {
     if (!read_line("Current password: ", current, sizeof(current))) {
         return false;
     }
-    if (!password_matches(current, users[index].password)) {
+    if (!password_matches(current, current_user.password)) {
         puts("Current password is incorrect.");
         return false;
     }
@@ -136,12 +157,14 @@ bool change_password_interactive(User *user) {
         return false;
     }
 
-    hash_password(replacement, users[index].password);
-    if (!save_users(users, count)) {
+    char password_hash[ATM_PASSWORD_LEN];
+    hash_password(replacement, password_hash);
+    if (storage_update_password(user->id, user->name, password_hash) != STORAGE_RESULT_OK) {
         puts("Could not save the new password.");
         return false;
     }
-    *user = users[index];
+    snprintf(user->password, sizeof(user->password), "%s", password_hash);
+    (void)storage_login_success(user->name);
     puts("Password changed successfully.");
     return true;
 }
