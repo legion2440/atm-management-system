@@ -52,6 +52,16 @@ typedef struct {
     bool active;
 } NotificationSession;
 
+typedef enum {
+    STORAGE_RESULT_OK = 0,
+    STORAGE_RESULT_NOT_FOUND,
+    STORAGE_RESULT_CONFLICT,
+    STORAGE_RESULT_DENIED,
+    STORAGE_RESULT_INSUFFICIENT,
+    STORAGE_RESULT_FULL,
+    STORAGE_RESULT_ERROR
+} StorageResult;
+
 /* utils.c */
 bool read_line(const char *prompt, char *buffer, size_t size);
 bool prompt_int(const char *prompt, int *value);
@@ -68,6 +78,7 @@ void ui_section(const char *title);
 /* password.c */
 void hash_password(const char *password, char output[ATM_PASSWORD_LEN]);
 bool password_matches(const char *password, const char *stored);
+bool password_needs_upgrade(const char *stored);
 
 /* storage.c */
 bool ensure_data_files(void);
@@ -77,6 +88,18 @@ bool load_accounts(Account *accounts, size_t capacity, size_t *count);
 bool save_accounts(const Account *accounts, size_t count);
 const char *storage_backend_name(void);
 bool storage_uses_sqlite(void);
+StorageResult storage_create_user(const char *name, const char *password_hash, User *created);
+StorageResult storage_update_password(int user_id, const char *name, const char *password_hash);
+bool storage_login_locked(const char *name, long long now, long long *locked_until);
+bool storage_login_failure(const char *name, long long now, int max_attempts, long long lock_seconds,
+                           long long *locked_until);
+bool storage_login_success(const char *name);
+StorageResult storage_account_create(const Account *account);
+StorageResult storage_account_update_contact(int user_id, long long number, bool update_phone, const char *value);
+StorageResult storage_account_transaction(int user_id, long long number, bool deposit, double amount,
+                                          double *new_balance);
+StorageResult storage_account_delete(int user_id, long long number);
+StorageResult storage_account_transfer(int user_id, long long number, int target_user_id);
 
 /* account.c */
 AccountType account_type_from_string(const char *text);
