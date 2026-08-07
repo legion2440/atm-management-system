@@ -11,5 +11,5 @@
 | Input helpers | `src/utils.c` | Safe line and numeric input parsing, length and whitespace validation |
 | Notifications | `src/notify.c` | Cross-process transfer notification through POSIX FIFO |
 | Shared API | `src/header.h` | Shared types, constants and function declarations |
-| Core verification | `tests/core_flow.sh`, `tests/edge_flow.sh`, `tests/security_flow.sh`, `tests/test_interest.c`, `tests/test_concurrency.c`, `tests/verify.sh` | Functional, boundary, credential-hardening and concurrent-write evidence |
+| Core verification | `tests/core_flow.sh`, `tests/edge_flow.sh`, `tests/security_flow.sh`, `tests/test_interest.c`, `tests/test_password.c`, `tests/test_concurrency.c`, `tests/verify.sh` | Functional, boundary, KDF-vector, credential-hardening and concurrent-write evidence |
 | Optional features | `tests/bonus_flow.sh`, `tests/notification_flow.sh`, `TEST_EVIDENCE.md` | Executable and documented coverage for extra project features |
