@@ -15,6 +15,12 @@ printf '\n'
 bash "$ROOT/tests/edge_flow.sh"
 printf '\n'
 
+bash "$ROOT/tests/security_flow.sh"
+printf '\n'
+
+"$ROOT/tests/bin/test_concurrency"
+printf '\n'
+
 bash "$ROOT/tests/bonus_flow.sh"
 printf '\n'
 
