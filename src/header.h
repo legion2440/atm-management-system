@@ -59,6 +59,11 @@ bool prompt_long_long(const char *prompt, long long *value);
 bool prompt_double(const char *prompt, double *value);
 void trim_whitespace(char *text);
 
+/* ui.c */
+void ui_banner(void);
+void ui_session_header(const User *user);
+void ui_section(const char *title);
+
 /* password.c */
 void hash_password(const char *password, char output[ATM_PASSWORD_LEN]);
 bool password_matches(const char *password, const char *stored);
@@ -69,6 +74,8 @@ bool load_users(User *users, size_t capacity, size_t *count);
 bool save_users(const User *users, size_t count);
 bool load_accounts(Account *accounts, size_t capacity, size_t *count);
 bool save_accounts(const Account *accounts, size_t count);
+const char *storage_backend_name(void);
+bool storage_uses_sqlite(void);
 
 /* account.c */
 AccountType account_type_from_string(const char *text);
@@ -82,6 +89,7 @@ Date account_interest_date(const Account *account);
 bool register_user_interactive(void);
 bool login_user_interactive(User *user);
 bool find_user_by_name(const char *name, User *user);
+bool change_password_interactive(User *user);
 
 /* system.c */
 void account_menu(User *user, NotificationSession *notifications);
