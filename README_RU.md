@@ -1,6 +1,6 @@
 # ATM Management System
 
-Терминальная ATM-система на C. Реализован весь обязательный scope 01-edu и все пункты официального bonus-раздела: relational database, улучшенный терминальный интерфейс, хэширование паролей, мгновенные уведомления, собственный Makefile, дополнительные функции и рефакторинг/оптимизация исходного starter-кода.
+Терминальная ATM-система на C. Реализован весь обязательный scope 01-edu и все пункты официального bonus-раздела: relational database, улучшенный терминальный интерфейс, защищённое хранение паролей, мгновенные уведомления, собственный Makefile, дополнительные функции и рефакторинг/оптимизация starter-кода.
 
 Основное runtime-хранилище — SQLite. Исходные текстовые файлы задания сохранены как seed и совместимый fallback.
 
@@ -13,6 +13,7 @@
 - [🚀 Быстрый запуск](#-быстрый-запуск)
 - [📝 О проекте](#-о-проекте)
 - [✨ Возможности](#-возможности)
+- [🔐 Защита](#-защита)
 - [🎁 Бонусы](#-бонусы)
 - [💰 Проценты](#-проценты)
 - [💾 Хранилище](#-хранилище)
@@ -30,7 +31,7 @@
 - GNU Make
 - SQLite development library
 - Bash и Python 3 для автоматических проверок
-- Linux / WSL для демонстрации FIFO-бонуса
+- Linux / WSL для FIFO-бонуса и multi-process concurrency checks
 
 Ubuntu / WSL:
 
@@ -55,9 +56,9 @@ Seed-пользователи:
 | `Alice` | `1234password` |
 | `Michel` | `password1234` |
 
-При первом запуске создаётся `data/atm.db`, данные импортируются из seed-файлов, а пароли хранятся как SHA-256.
+При первом запуске создаётся `data/atm.db`, данные импортируются из seed-файлов. Старые seed-credentials читаются для совместимости и после успешного login автоматически мигрируют на salted PBKDF2.
 
-Сбросить локальные данные:
+Сбросить sample data и состояние login security:
 
 ```bash
 bash scripts/reset_data.sh
@@ -78,13 +79,15 @@ bash scripts/reset_data.sh
 9. Сменить пароль `[bonus]`
 10. Сводка по счетам `[bonus]`
 
-Код разделён на отдельные модули правил счетов, auth, persistence, input, notification, UI и session actions.
+Код разделён на отдельные модули account rules, auth, persistence, input, notification, UI и session actions.
 
 ## ✨ Возможности
 
 - регистрация и запрет одинаковых username;
 - login по сохранённым данным;
-- SHA-256 password storage;
+- salted `PBKDF2-HMAC-SHA256` password storage;
+- автоматическая миграция старых `sha256:` / plaintext seed credentials после успешного login;
+- persistent lockout после повторных неверных попыток входа;
 - смена пароля с проверкой текущего;
 - `current`, `saving/savings`, `fixed01`, `fixed02`, `fixed03`;
 - создание, изменение, просмотр, список и удаление своих счетов;
@@ -93,17 +96,28 @@ bash scripts/reset_data.sh
 - transfer ownership другому пользователю;
 - сводка: количество счетов, total balance и разбивка по типам.
 
+## 🔐 Защита
+
+Дополнительно к функциональным требованиям сделано следующее:
+
+- **Password KDF:** новые пароли сохраняются через `PBKDF2-HMAC-SHA256`, 100 000 итераций и отдельный 128-bit salt. Одинаковые пароли дают разные stored values.
+- **Credential migration:** старые `sha256:` и plaintext seed-записи остаются только для совместимости; после успешного входа они переписываются в PBKDF2-формат.
+- **Brute-force protection:** после 5 неверных попыток для одного username включается блокировка на 30 секунд. Состояние хранится в SQLite, поэтому перезапуск программы блокировку не сбрасывает. `ATM_LOGIN_LOCK_SECONDS` используется для deterministic tests и controlled deployments.
+- **Authorization:** операции со счётом проверяют и `user_id`, и номер счёта, поэтому знания одного account number недостаточно для доступа к чужому счёту.
+- **SQL injection resistance:** пользовательские данные передаются в SQLite через prepared statements и bound parameters.
+- **Concurrent money safety:** deposit/withdraw выполняются внутри SQLite write transaction. Multi-process test проверяет отсутствие lost updates и невозможность concurrent overdraft.
+
 ## 🎁 Бонусы
 
 | Bonus | Статус | Реализация |
 | --- | --- | --- |
 | Мгновенное уведомление о transfer | ✅ | POSIX FIFO + child listener |
 | Обновлённый terminal interface | ✅ | TTY-aware ANSI colors, рамки, section headers |
-| Зашифрованный пароль | ✅ | SHA-256 |
+| Защищённые пароли | ✅ | salted PBKDF2 + migration + lockout |
 | Relational database | ✅ | SQLite `users` + `accounts`, FK, constraints, index |
 | Собственный Makefile | ✅ | build/verify/sanitize/text-only targets |
 | Дополнительные функции | ✅ | смена пароля + account summary |
-| Оптимизация исходного кода | ✅ | модульный рефакторинг, prepared statements, transactions, indexes, общий validation/rules layer |
+| Оптимизация исходного кода | ✅ | модульный рефакторинг, prepared statements, targeted writes, transactions, indexes, общий validation/rules layer |
 
 Полная карта evidence: [`TEST_EVIDENCE.md`](TEST_EVIDENCE.md).
 
@@ -144,9 +158,14 @@ accounts
   phone
   balance CHECK(balance >= 0)
   type CHECK(valid type)
+
+login_security
+  name PRIMARY KEY
+  failed_attempts CHECK(failed_attempts >= 0)
+  locked_until CHECK(locked_until >= 0)
 ```
 
-Есть индекс `idx_accounts_user_id`. Запись выполняется prepared statements внутри явных transactions.
+Есть индекс `idx_accounts_user_id`. User/account writes используют prepared statements. Изменения balance идут в явных write transactions; create/update/delete/transfer выполняются targeted SQL-операциями, а не полной перезаписью таблицы.
 
 Исходные файлы задания используются как seed:
 
@@ -161,12 +180,14 @@ Text fallback:
 ATM_STORAGE=text ./atm
 ```
 
-Сборка вообще без SQLite:
+Сборка без SQLite:
 
 ```bash
 make fclean
 make TEXT_ONLY=1
 ```
+
+Text backend сохраняет atomic file replacement и persistent login lockout, но остаётся compatibility-mode и не предназначен для нескольких concurrent writers. Multi-process balance guarantees относятся к default SQLite backend.
 
 ## 🔔 Уведомления
 
@@ -176,7 +197,7 @@ make TEXT_ONLY=1
 [NOTIFICATION] You received account 777 from Alice.
 ```
 
-На native Windows transfer работает, но именно FIFO-бонус отключён. Для этого пункта используйте WSL/Linux.
+На native Windows transfer работает, но FIFO-бонус отключён. Для этого пункта используйте WSL/Linux.
 
 ## 🧪 Тесты и проверка
 
@@ -186,14 +207,16 @@ make TEXT_ONLY=1
 make verify
 ```
 
-Набор проверок состоит из четырёх слоёв:
+Набор проверок включает:
 
-- unit boundary checks для дат, високосных годов, maturity dates и расчётов процентов;
+- unit boundary checks для дат, високосных годов, maturity dates и процентов;
 - 25 core-кейсов: регистрация, login, создание/обновление счетов, проценты, транзакции, удаление, transfer ownership и persistence;
-- 20 edge cases: неверные credentials/input, duplicate/negative account number, invalid date/type, negative balance, zero/negative transaction, invalid action, missing/self transfer, доступ прежнего владельца после transfer, ошибки смены пароля, whitespace в token-полях, слишком длинный input и целостность persistent state после отклонённых операций;
-- дополнительные проверки SQLite schema/FK/index, password storage, TUI, account summary, text fallback и instant notification между двумя активными сессиями.
+- 20 edge cases: неверные credentials/input, duplicate/negative account number, invalid date/type, negative balance, zero/negative transaction, invalid action, missing/self transfer, доступ прежнего владельца, ошибки смены пароля, whitespace, oversized input и целостность persistent state;
+- 5 security cases: PBKDF2 migration, разные salts, persisted lockout и восстановление login после очистки lock state;
+- 2 multi-process concurrency cases: отсутствие lost deposits и невозможность concurrent overdraft в SQLite;
+- дополнительные проверки SQLite schema/FK/index, password storage, TUI, account summary, text fallback и instant notification между активными сессиями.
 
-Чистая пересборка плюс тот же набор проверок:
+Чистая пересборка плюс тот же набор:
 
 ```bash
 make check
@@ -237,6 +260,8 @@ atm-management-system/
 │   ├── core_flow.sh
 │   ├── edge_flow.sh
 │   ├── notification_flow.sh
+│   ├── security_flow.sh
+│   ├── test_concurrency.c
 │   ├── test_interest.c
 │   └── verify.sh
 ├── AGENTS.md
@@ -248,9 +273,10 @@ atm-management-system/
 
 ## ⚠️ Примечания
 
-- `atm.db` — основное runtime-хранилище; `users.txt` и `records.txt` после запуска являются seed/fallback.
-- SHA-256 здесь используется для учебного bonus-пункта. Для production password storage нужен salted slow KDF вроде Argon2/scrypt/bcrypt.
-- Runtime SQLite-файлы находятся в `.gitignore` и пересоздаются после `scripts/reset_data.sh`.
+- `atm.db` — основное runtime-хранилище; `users.txt` и `records.txt` являются seed/fallback.
+- PBKDF2 реализован внутри проекта, чтобы не добавлять тяжёлую внешнюю dependency. В production обычно предпочитают memory-hard KDF вроде Argon2id и подбирают cost под железо.
+- Lockout здесь намеренно простой: 5 ошибок и 30 секунд. В реальной банковской системе дополнительно нужны rate limiting, monitoring, device/session controls и operational security.
+- Runtime SQLite и text-mode login-security files находятся в `.gitignore` и пересоздаются после `scripts/reset_data.sh`.
 - FIFO notification — POSIX-specific, остальная логика от него не зависит.
 
 ## 🧑‍💻 Автор
