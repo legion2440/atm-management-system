@@ -3,16 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static int next_account_id(const Account *accounts, size_t count) {
-    int max_id = -1;
-    for (size_t i = 0U; i < count; ++i) {
-        if (accounts[i].id > max_id) {
-            max_id = accounts[i].id;
-        }
-    }
-    return max_id + 1;
-}
-
 static long find_owned_account(const Account *accounts, size_t count, const User *user, long long number) {
     for (size_t i = 0U; i < count; ++i) {
         if (accounts[i].user_id == user->id && accounts[i].number == number) {
@@ -20,15 +10,6 @@ static long find_owned_account(const Account *accounts, size_t count, const User
         }
     }
     return -1;
-}
-
-static bool account_number_exists(const Account *accounts, size_t count, long long number) {
-    for (size_t i = 0U; i < count; ++i) {
-        if (accounts[i].number == number) {
-            return true;
-        }
-    }
-    return false;
 }
 
 static void print_account(const Account *account) {
@@ -61,49 +42,40 @@ static void create_account(const User *user) {
     ui_section("Create account");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
-    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
-        return;
-    }
+    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) return;
     if (count >= ATM_MAX_ACCOUNTS) {
         puts("Account storage is full.");
         return;
     }
 
-    Account account;
-    account.id = next_account_id(accounts, count);
+    Account account = {0};
     account.user_id = user->id;
     snprintf(account.owner, sizeof(account.owner), "%s", user->name);
 
-    if (!prompt_long_long("Account number: ", &account.number)) {
-        return;
-    }
-    if (account.number < 0 || account_number_exists(accounts, count, account.number)) {
+    if (!prompt_long_long("Account number: ", &account.number)) return;
+    if (account.number < 0) {
         puts("This account number already exists or is invalid.");
         return;
     }
 
     char date_text[32];
     for (;;) {
-        if (!read_line("Creation date (dd/mm/yyyy): ", date_text, sizeof(date_text))) {
-            return;
-        }
-        if (parse_date(date_text, &account.created)) {
-            break;
-        }
+        if (!read_line("Creation date (dd/mm/yyyy): ", date_text, sizeof(date_text))) return;
+        if (parse_date(date_text, &account.created)) break;
         puts("Invalid date. Use dd/mm/yyyy.");
     }
 
-    if (!read_line("Country: ", account.country, sizeof(account.country)) || account.country[0] == '\0' || contains_whitespace(account.country)) {
+    if (!read_line("Country: ", account.country, sizeof(account.country)) ||
+        account.country[0] == '\0' || contains_whitespace(account.country)) {
         puts("Country must be a non-empty single token.");
         return;
     }
-    if (!read_line("Phone number: ", account.phone, sizeof(account.phone)) || account.phone[0] == '\0' || contains_whitespace(account.phone)) {
+    if (!read_line("Phone number: ", account.phone, sizeof(account.phone)) ||
+        account.phone[0] == '\0' || contains_whitespace(account.phone)) {
         puts("Phone number must be non-empty and contain no whitespace.");
         return;
     }
-    if (!prompt_double("Initial deposit: $", &account.balance)) {
-        return;
-    }
+    if (!prompt_double("Initial deposit: $", &account.balance)) return;
     if (account.balance < 0.0) {
         puts("Initial deposit cannot be negative.");
         return;
@@ -111,18 +83,22 @@ static void create_account(const User *user) {
 
     char type_text[ATM_TYPE_LEN];
     for (;;) {
-        if (!read_line("Account type (current/saving/fixed01/fixed02/fixed03): ", type_text, sizeof(type_text))) {
-            return;
-        }
+        if (!read_line("Account type (current/saving/fixed01/fixed02/fixed03): ", type_text, sizeof(type_text))) return;
         account.type = account_type_from_string(type_text);
-        if (account.type != ACCOUNT_INVALID) {
-            break;
-        }
+        if (account.type != ACCOUNT_INVALID) break;
         puts("Invalid account type.");
     }
 
-    accounts[count++] = account;
-    if (!save_accounts(accounts, count)) {
+    StorageResult result = storage_account_create(&account);
+    if (result == STORAGE_RESULT_CONFLICT) {
+        puts("This account number already exists or is invalid.");
+        return;
+    }
+    if (result == STORAGE_RESULT_FULL) {
+        puts("Account storage is full.");
+        return;
+    }
+    if (result != STORAGE_RESULT_OK) {
         puts("Could not save the account.");
         return;
     }
@@ -133,16 +109,11 @@ static void update_account(const User *user) {
     ui_section("Update account");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
-    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
-        return;
-    }
+    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) return;
 
     long long number;
-    if (!prompt_long_long("Account number to update: ", &number)) {
-        return;
-    }
-    long index = find_owned_account(accounts, count, user, number);
-    if (index < 0) {
+    if (!prompt_long_long("Account number to update: ", &number)) return;
+    if (find_owned_account(accounts, count, user, number) < 0) {
         puts("Account does not exist for this user.");
         return;
     }
@@ -150,17 +121,19 @@ static void update_account(const User *user) {
     puts("1. Update phone number");
     puts("2. Update country");
     int choice;
-    if (!prompt_int("Choice: ", &choice)) {
-        return;
-    }
+    if (!prompt_int("Choice: ", &choice)) return;
 
+    char value[ATM_COUNTRY_LEN];
+    bool update_phone;
     if (choice == 1) {
-        if (!read_line("New phone number: ", accounts[index].phone, sizeof(accounts[index].phone)) || accounts[index].phone[0] == '\0' || contains_whitespace(accounts[index].phone)) {
+        update_phone = true;
+        if (!read_line("New phone number: ", value, ATM_PHONE_LEN) || value[0] == '\0' || contains_whitespace(value)) {
             puts("Invalid phone number.");
             return;
         }
     } else if (choice == 2) {
-        if (!read_line("New country: ", accounts[index].country, sizeof(accounts[index].country)) || accounts[index].country[0] == '\0' || contains_whitespace(accounts[index].country)) {
+        update_phone = false;
+        if (!read_line("New country: ", value, sizeof(value)) || value[0] == '\0' || contains_whitespace(value)) {
             puts("Invalid country.");
             return;
         }
@@ -169,7 +142,12 @@ static void update_account(const User *user) {
         return;
     }
 
-    if (!save_accounts(accounts, count)) {
+    StorageResult result = storage_account_update_contact(user->id, number, update_phone, value);
+    if (result == STORAGE_RESULT_NOT_FOUND) {
+        puts("Account does not exist for this user.");
+        return;
+    }
+    if (result != STORAGE_RESULT_OK) {
         puts("Could not save the update.");
         return;
     }
@@ -180,14 +158,10 @@ static void check_account(const User *user) {
     ui_section("Account details");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
-    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
-        return;
-    }
+    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) return;
 
     long long number;
-    if (!prompt_long_long("Account number to check: ", &number)) {
-        return;
-    }
+    if (!prompt_long_long("Account number to check: ", &number)) return;
     long index = find_owned_account(accounts, count, user, number);
     if (index < 0) {
         puts("Account does not exist for this user.");
@@ -202,32 +176,24 @@ static void list_accounts(const User *user) {
     ui_section("Owned accounts");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
-    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
-        return;
-    }
+    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) return;
 
     bool found = false;
     for (size_t i = 0U; i < count; ++i) {
         if (accounts[i].user_id == user->id) {
-            if (found) {
-                puts("------------------------------------------");
-            }
+            if (found) puts("------------------------------------------");
             print_account(&accounts[i]);
             found = true;
         }
     }
-    if (!found) {
-        puts("You do not own any accounts.");
-    }
+    if (!found) puts("You do not own any accounts.");
 }
 
 static void account_summary(const User *user) {
     ui_section("Account summary");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
-    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
-        return;
-    }
+    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) return;
 
     size_t owned = 0U;
     size_t current = 0U;
@@ -235,18 +201,12 @@ static void account_summary(const User *user) {
     size_t fixed = 0U;
     double total = 0.0;
     for (size_t i = 0U; i < count; ++i) {
-        if (accounts[i].user_id != user->id) {
-            continue;
-        }
+        if (accounts[i].user_id != user->id) continue;
         owned++;
         total += accounts[i].balance;
-        if (accounts[i].type == ACCOUNT_CURRENT) {
-            current++;
-        } else if (accounts[i].type == ACCOUNT_SAVINGS) {
-            savings++;
-        } else {
-            fixed++;
-        }
+        if (accounts[i].type == ACCOUNT_CURRENT) current++;
+        else if (accounts[i].type == ACCOUNT_SAVINGS) savings++;
+        else fixed++;
     }
 
     printf("Accounts: %zu\n", owned);
@@ -254,28 +214,20 @@ static void account_summary(const User *user) {
     printf("Current: %zu | Savings: %zu | Fixed: %zu\n", current, savings, fixed);
 }
 
-static bool transactions_allowed(AccountType type) {
-    return type == ACCOUNT_CURRENT || type == ACCOUNT_SAVINGS;
-}
-
 static void make_transaction(const User *user) {
     ui_section("Transaction");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
-    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
-        return;
-    }
+    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) return;
 
     long long number;
-    if (!prompt_long_long("Account number: ", &number)) {
-        return;
-    }
+    if (!prompt_long_long("Account number: ", &number)) return;
     long index = find_owned_account(accounts, count, user, number);
     if (index < 0) {
         puts("Account does not exist for this user.");
         return;
     }
-    if (!transactions_allowed(accounts[index].type)) {
+    if (accounts[index].type != ACCOUNT_CURRENT && accounts[index].type != ACCOUNT_SAVINGS) {
         puts("Transactions are not allowed for fixed accounts.");
         return;
     }
@@ -283,63 +235,51 @@ static void make_transaction(const User *user) {
     puts("1. Deposit");
     puts("2. Withdraw");
     int choice;
-    if (!prompt_int("Choice: ", &choice)) {
+    if (!prompt_int("Choice: ", &choice)) return;
+    if (choice != 1 && choice != 2) {
+        puts("Invalid choice.");
         return;
     }
 
     double amount;
-    if (!prompt_double("Amount: $", &amount)) {
-        return;
-    }
+    if (!prompt_double("Amount: $", &amount)) return;
     if (amount <= 0.0) {
         puts("Transaction amount must be positive.");
         return;
     }
 
-    if (choice == 1) {
-        accounts[index].balance += amount;
-    } else if (choice == 2) {
-        if (amount > accounts[index].balance) {
-            puts("Withdrawal denied: amount exceeds the available balance.");
-            return;
-        }
-        accounts[index].balance -= amount;
-    } else {
-        puts("Invalid choice.");
+    double new_balance = 0.0;
+    StorageResult result = storage_account_transaction(user->id, number, choice == 1, amount, &new_balance);
+    if (result == STORAGE_RESULT_INSUFFICIENT) {
+        puts("Withdrawal denied: amount exceeds the available balance.");
         return;
     }
-
-    if (!save_accounts(accounts, count)) {
+    if (result == STORAGE_RESULT_DENIED) {
+        puts("Transactions are not allowed for fixed accounts.");
+        return;
+    }
+    if (result == STORAGE_RESULT_NOT_FOUND) {
+        puts("Account does not exist for this user.");
+        return;
+    }
+    if (result != STORAGE_RESULT_OK) {
         puts("Could not save the transaction.");
         return;
     }
-    printf("Transaction completed. New balance: $%.2f\n", accounts[index].balance);
+    printf("Transaction completed. New balance: $%.2f\n", new_balance);
 }
 
 static void remove_account(const User *user) {
     ui_section("Remove account");
-    Account accounts[ATM_MAX_ACCOUNTS];
-    size_t count;
-    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
-        return;
-    }
-
     long long number;
-    if (!prompt_long_long("Account number to remove: ", &number)) {
-        return;
-    }
-    long index = find_owned_account(accounts, count, user, number);
-    if (index < 0) {
+    if (!prompt_long_long("Account number to remove: ", &number)) return;
+
+    StorageResult result = storage_account_delete(user->id, number);
+    if (result == STORAGE_RESULT_NOT_FOUND) {
         puts("Account does not exist for this user.");
         return;
     }
-
-    for (size_t i = (size_t)index + 1U; i < count; ++i) {
-        accounts[i - 1U] = accounts[i];
-    }
-    count--;
-
-    if (!save_accounts(accounts, count)) {
+    if (result != STORAGE_RESULT_OK) {
         puts("Could not remove the account.");
         return;
     }
@@ -350,24 +290,17 @@ static void transfer_owner(const User *user) {
     ui_section("Transfer ownership");
     Account accounts[ATM_MAX_ACCOUNTS];
     size_t count;
-    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) {
-        return;
-    }
+    if (!load_accounts(accounts, ATM_MAX_ACCOUNTS, &count)) return;
 
     long long number;
-    if (!prompt_long_long("Account number to transfer: ", &number)) {
-        return;
-    }
-    long index = find_owned_account(accounts, count, user, number);
-    if (index < 0) {
+    if (!prompt_long_long("Account number to transfer: ", &number)) return;
+    if (find_owned_account(accounts, count, user, number) < 0) {
         puts("Account does not exist for this user.");
         return;
     }
 
     char target_name[ATM_NAME_LEN];
-    if (!read_line("New owner's username: ", target_name, sizeof(target_name))) {
-        return;
-    }
+    if (!read_line("New owner's username: ", target_name, sizeof(target_name))) return;
 
     User target;
     if (!find_user_by_name(target_name, &target)) {
@@ -379,9 +312,12 @@ static void transfer_owner(const User *user) {
         return;
     }
 
-    accounts[index].user_id = target.id;
-    snprintf(accounts[index].owner, sizeof(accounts[index].owner), "%s", target.name);
-    if (!save_accounts(accounts, count)) {
+    StorageResult result = storage_account_transfer(user->id, number, target.id);
+    if (result == STORAGE_RESULT_NOT_FOUND) {
+        puts("Account does not exist for this user.");
+        return;
+    }
+    if (result != STORAGE_RESULT_OK) {
         puts("Could not transfer the account.");
         return;
     }
@@ -408,44 +344,23 @@ void account_menu(User *user, NotificationSession *notifications) {
         puts("10. Account summary [bonus]");
 
         int choice;
-        if (!prompt_int("Choice: ", &choice)) {
-            return;
-        }
+        if (!prompt_int("Choice: ", &choice)) return;
 
         switch (choice) {
-            case 1:
-                create_account(user);
-                break;
-            case 2:
-                update_account(user);
-                break;
-            case 3:
-                check_account(user);
-                break;
-            case 4:
-                list_accounts(user);
-                break;
-            case 5:
-                make_transaction(user);
-                break;
-            case 6:
-                remove_account(user);
-                break;
-            case 7:
-                transfer_owner(user);
-                break;
-            case 8:
-                return;
+            case 1: create_account(user); break;
+            case 2: update_account(user); break;
+            case 3: check_account(user); break;
+            case 4: list_accounts(user); break;
+            case 5: make_transaction(user); break;
+            case 6: remove_account(user); break;
+            case 7: transfer_owner(user); break;
+            case 8: return;
             case 9:
                 ui_section("Change password");
                 (void)change_password_interactive(user);
                 break;
-            case 10:
-                account_summary(user);
-                break;
-            default:
-                puts("Invalid choice.");
-                break;
+            case 10: account_summary(user); break;
+            default: puts("Invalid choice."); break;
         }
     }
 }
