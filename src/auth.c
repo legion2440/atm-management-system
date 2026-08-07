@@ -34,8 +34,8 @@ bool register_user_interactive(void) {
         return false;
     }
 
-    if (name[0] == '\0' || password[0] == '\0' || strchr(name, ' ') != NULL) {
-        puts("Username and password must be non-empty; usernames cannot contain spaces.");
+    if (name[0] == '\0' || password[0] == '\0' || contains_whitespace(name)) {
+        puts("Username and password must be non-empty; usernames cannot contain whitespace.");
         return false;
     }
 
