@@ -13,3 +13,4 @@ tests/bin/
 data/atm.db
 data/atm.db-shm
 data/atm.db-wal
+data/login_security.txt
